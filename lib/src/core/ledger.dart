@@ -256,6 +256,9 @@ class CategoryIdentity {
   final int? color;
 
   @override
+  String toString() => name;
+
+  @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is CategoryIdentity &&
