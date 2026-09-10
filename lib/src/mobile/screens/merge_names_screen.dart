@@ -80,6 +80,7 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
     final results = await Future.wait(<Future<Object>>[
       _db.transactions(),
       _db.aliases(),
+      if (widget.kind == NameKind.card) _db.paymentMethods(),
     ]);
     if (!mounted) return;
 
@@ -89,6 +90,13 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
       final String name = _nameOf(t);
       counts[name] = (counts[name] ?? 0) + 1;
       (labels[name] ??= <String>{}).add(_rawOf(t));
+    }
+    
+    if (widget.kind == NameKind.card && results.length > 2) {
+      for (final String pm in results[2] as List<String>) {
+        counts.putIfAbsent(pm, () => 0);
+        labels.putIfAbsent(pm, () => <String>{pm});
+      }
     }
 
     setState(() {
@@ -100,6 +108,44 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
       // transaction deleted, or it was folded into something else.
       _selected.retainAll(counts.keys);
     });
+  }
+
+  Future<void> _addPaymentMethod() async {
+    final TextEditingController nameController = TextEditingController();
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Add Payment Method'),
+          content: TextField(
+            controller: nameController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Name (e.g. Chase Sapphire)',
+            ),
+            onSubmitted: (value) => Navigator.pop(context, value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, nameController.text.trim()),
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+    if (newName != null && newName.isNotEmpty) {
+      await _db.addPaymentMethod(newName);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added "$newName"')));
+      }
+    }
   }
 
   void _toggle(String name) {
@@ -232,6 +278,12 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
       child: UndoToast(
         child: Scaffold(
           appBar: _appBar(),
+          floatingActionButton: widget.kind == NameKind.card
+              ? FloatingActionButton(
+                  onPressed: _addPaymentMethod,
+                  child: const Icon(Icons.add),
+                )
+              : null,
           body: _loading
               ? const Center(child: CircularProgressIndicator())
               : names.isEmpty

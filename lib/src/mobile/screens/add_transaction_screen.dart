@@ -64,11 +64,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     'Other',
   ];
 
+  final List<String> _addedPaymentTypes = <String>[];
+
   /// The base methods, plus every real card or account the ledger has
   /// already seen (see [AddTransactionScreen.paymentTypes]) that isn't one of
   /// them already — alphabetical, so a growing list of cards stays scannable.
   List<String> get _paymentTypeChoices {
-    final List<String> extra = widget.paymentTypes
+    final Set<String> all = <String>{
+      ..._basePaymentTypes,
+      ...widget.paymentTypes,
+      ..._addedPaymentTypes,
+    };
+    final List<String> extra = all
         .where((String t) => !_basePaymentTypes.contains(t))
         .toList()
       ..sort();
@@ -383,6 +390,44 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
+  Future<void> _addNewPaymentMethod() async {
+    final TextEditingController nameController = TextEditingController();
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Add Payment Method'),
+          content: TextField(
+            controller: nameController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Name (e.g. Chase Sapphire)',
+            ),
+            onSubmitted: (value) => Navigator.pop(context, value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, nameController.text.trim()),
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+    if (newName != null && newName.isNotEmpty) {
+      await AppDatabase.instance.addPaymentMethod(newName);
+      setState(() {
+        _addedPaymentTypes.add(newName);
+        _paymentType = newName;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -597,26 +642,32 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: _paymentTypeChoices.map((String type) {
-                    final isSelected = _paymentType == type;
-                    return ChoiceChip(
-                      label: Text(type),
-                      selected: isSelected,
-                      avatar: isSelected
-                          ? const Icon(Icons.check, size: 16)
-                          : Icon(
-                              type == 'Cash'
-                                  ? Icons.payments_outlined
-                                  : type == 'UPI'
-                                      ? Icons.qr_code
-                                      : Icons.credit_card,
-                              size: 16,
-                            ),
-                      onSelected: (bool selected) {
-                        if (selected) setState(() => _paymentType = type);
-                      },
-                    );
-                  }).toList(),
+                  children: <Widget>[
+                    ..._paymentTypeChoices.map((String type) {
+                      final isSelected = _paymentType == type;
+                      return ChoiceChip(
+                        label: Text(type),
+                        selected: isSelected,
+                        avatar: isSelected
+                            ? const Icon(Icons.check, size: 16)
+                            : Icon(
+                                type == 'Cash'
+                                    ? Icons.payments_outlined
+                                    : type == 'UPI'
+                                        ? Icons.qr_code
+                                        : Icons.credit_card,
+                                size: 16,
+                              ),
+                        onSelected: (bool selected) {
+                          if (selected) setState(() => _paymentType = type);
+                        },
+                      );
+                    }),
+                    ActionChip(
+                      label: const Text('+ Add new'),
+                      onPressed: _addNewPaymentMethod,
+                    ),
+                  ],
                 ),
               ],
             ),
