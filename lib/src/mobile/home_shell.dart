@@ -835,12 +835,16 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Future<void> _openAddTransaction() async {
     final view = _derive();
+    final customTypes = await AppDatabase.instance.paymentMethods();
+    final allTypes = <String>{...view.paymentTypes, ...customTypes}.toList()..sort();
+    
+    if (!mounted) return;
     final bool? added = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (_) => AddTransactionScreen(
           categories: _categories,
           merchants: view.merchants,
-          paymentTypes: view.paymentTypes,
+          paymentTypes: allTypes,
         ),
       ),
     );
