@@ -102,6 +102,7 @@ class AppDatabase {
     await db.execute(_createNameAliases);
     await db.execute(_createUnaddedSms);
     await db.execute(_createUnaddedSmsIndex);
+    await db.execute(_createPaymentMethods);
 
     final batch = db.batch();
     for (final name in _defaultCategories) {
@@ -109,6 +110,9 @@ class AppDatabase {
         'name': name,
         'icon': categoryEmoji(name),
       });
+    }
+    for (final String type in <String>['Cash', 'UPI', 'Debit Card', 'Credit Card', 'Other']) {
+      batch.insert('payment_methods', <String, Object?>{'name': type});
     }
     await batch.commit(noResult: true);
   }
@@ -230,6 +234,12 @@ class AppDatabase {
       )
     ''';
 
+  static const String _createPaymentMethods = '''
+      CREATE TABLE payment_methods (
+        name TEXT PRIMARY KEY COLLATE NOCASE
+      )
+    ''';
+
   /// v1 predates any notion of spend-vs-receive, so every existing row is a
   /// debit with no reference — which is exactly what the column defaults say.
   /// v2 predates delete and incremental scanning; both new tables start empty,
@@ -257,6 +267,7 @@ class AppDatabase {
   /// v12 adds `categories.color` for custom category colors.
   /// v13 fixes a bug where `CategoryIdentity` was stored as a category name by
   /// renaming it to `Unknown`.
+  /// v14 adds the `payment_methods` table to store manually added accounts.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute(
@@ -410,6 +421,30 @@ class AppDatabase {
           );
         }
       }
+    }
+
+    if (oldVersion < 14) {
+      await db.execute(_createPaymentMethods);
+      final batch = db.batch();
+      for (final String type in <String>['Cash', 'UPI', 'Debit Card', 'Credit Card', 'Other']) {
+        batch.insert('payment_methods', <String, Object?>{'name': type}, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      
+      // Also seed with any existing unique payment_types from transactions.
+      final existingTypes = await db.query(
+        'transactions',
+        columns: <String>['payment_type'],
+        distinct: true,
+      );
+      
+      for (final row in existingTypes) {
+        final String? type = row['payment_type'] as String?;
+        if (type != null && type.trim().isNotEmpty) {
+          batch.insert('payment_methods', <String, Object?>{'name': type.trim()}, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+      }
+      
+      await batch.commit(noResult: true);
     }
 
     if (oldVersion < 9) {
@@ -618,6 +653,27 @@ class AppDatabase {
       },
       where: 'id = ?',
       whereArgs: <Object?>[id],
+    );
+  }
+
+  Future<List<String>> paymentMethods() async {
+    final db = await database;
+    final rows = await db.query(
+      'payment_methods',
+      columns: <String>['name'],
+      orderBy: 'name ASC',
+    );
+    return rows.map((row) => row['name'] as String).toList();
+  }
+
+  Future<void> addPaymentMethod(String name) async {
+    final db = await database;
+    final clean = name.trim();
+    if (clean.isEmpty) return;
+    await db.insert(
+      'payment_methods',
+      <String, Object?>{'name': clean},
+      conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }
 
