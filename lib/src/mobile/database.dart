@@ -254,6 +254,9 @@ class AppDatabase {
   /// in transactions, merchant_mappings, deleted_transactions, and name_aliases.
   /// v11 adds `unadded_sms.is_read`, so a message can be marked read without
   /// removing it from the inbox the way dismissing it does.
+  /// v12 adds `categories.color` for custom category colors.
+  /// v13 fixes a bug where `CategoryIdentity` was stored as a category name by
+  /// renaming it to `Unknown`.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute(
@@ -343,6 +346,70 @@ class AppDatabase {
 
     if (oldVersion < 12) {
       await db.execute('ALTER TABLE categories ADD COLUMN color INTEGER');
+    }
+
+    if (oldVersion < 13) {
+      final corruptedName = "Instance of 'CategoryIdentity'";
+      
+      // If "Unknown" already exists, we will just merge the corrupted category into it.
+      // Otherwise, we can just rename it.
+      final unknownExists = await db.query(
+        'categories',
+        where: 'name = ? COLLATE NOCASE',
+        whereArgs: <Object?>['Unknown'],
+        limit: 1,
+      );
+
+      final corruptedExists = await db.query(
+        'categories',
+        where: 'name = ?',
+        whereArgs: <Object?>[corruptedName],
+        limit: 1,
+      );
+
+      if (corruptedExists.isNotEmpty) {
+        final corruptedId = corruptedExists.first['id'] as int;
+        
+        if (unknownExists.isEmpty) {
+          // Just rename it
+          await db.update(
+            'categories',
+            <String, Object?>{'name': 'Unknown'},
+            where: 'id = ?',
+            whereArgs: <Object?>[corruptedId],
+          );
+        } else {
+          // Merge it into existing "Unknown" category
+          final unknownId = unknownExists.first['id'] as int;
+          
+          await db.update(
+            'transactions',
+            <String, Object?>{'category_id': unknownId},
+            where: 'category_id = ?',
+            whereArgs: <Object?>[corruptedId],
+          );
+          
+          await db.update(
+            'transaction_splits',
+            <String, Object?>{'category_id': unknownId},
+            where: 'category_id = ?',
+            whereArgs: <Object?>[corruptedId],
+          );
+          
+          await db.update(
+            'merchant_mappings',
+            <String, Object?>{'category_id': unknownId},
+            where: 'category_id = ?',
+            whereArgs: <Object?>[corruptedId],
+          );
+          
+          await db.delete(
+            'categories',
+            where: 'id = ?',
+            whereArgs: <Object?>[corruptedId],
+          );
+        }
+      }
     }
 
     if (oldVersion < 9) {
