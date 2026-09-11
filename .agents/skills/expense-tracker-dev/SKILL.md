@@ -51,6 +51,12 @@ This skill covers the project structure, design invariants, database schema, SMS
 >      5. Pull the merged main locally: `git checkout main && git pull`
 >      6. **Tag the release** (unless the user explicitly says no tag) — same semver rules as above.
 >    - **Tagging is optional**: The user will explicitly say "no tag" or "skip tag" if they don't want one. Otherwise, always tag after merging.
+>
+> 5. **Mandatory PR/MR Description Protocol**:
+>    Whenever a new branch is created and a Pull Request (PR) or Merge Request (MR) is opened or updated, **YOU MUST GENERATE AND UPDATE THE RELEVANT MR/PR DESCRIPTION**:
+>    - Provide a clear template with the title, summary of changes, and technical notes for reviewers.
+>    - If updating an existing PR via GitHub CLI (`gh pr edit`), automatically apply the generated description.
+>    - Never leave the user without a comprehensive description to copy-paste or submit when code is pushed to a branch.
 
 ---
 
