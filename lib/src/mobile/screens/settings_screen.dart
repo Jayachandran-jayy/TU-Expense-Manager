@@ -921,50 +921,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             onChanged: widget.onChanged,
                           ),
                 ),
-                const Divider(height: 32),
-                SettingsHeader('Updates'),
-                SwitchListTile(
-                  value: _autoCheck,
-                  onChanged: _setAutoCheck,
-                  title: const Text('Check automatically'),
-                  subtitle: const Text(
-                    'On launch, at most once a week. Nothing is downloaded '
-                    'without asking.',
+                if (!isFDroidBuild) ...[
+                  const Divider(height: 32),
+                  SettingsHeader('Updates'),
+                  SwitchListTile(
+                    value: _autoCheck,
+                    onChanged: _setAutoCheck,
+                    title: const Text('Check automatically'),
+                    subtitle: const Text(
+                      'On launch, at most once a week. Nothing is downloaded '
+                      'without asking.',
+                    ),
                   ),
-                ),
-                ListTile(
-                  title: const Text('Check for updates'),
-                  subtitle: Text(
-                    _status ??
-                        (_lastChecked == null
-                            ? 'Not checked yet'
-                            : 'Last checked '
-                                '${_checkedFormat.format(_lastChecked!)}'),
-                  ),
-                  trailing: _checking
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : FilledButton.tonal(
-                          onPressed: _checkNow,
-                          child: const Text('Check now'),
-                        ),
-                ),
-                if (release != null)
                   ListTile(
-                    leading: Icon(
-                      Icons.system_update_alt,
-                      color: theme.colorScheme.primary,
+                    title: const Text('Check for updates'),
+                    subtitle: Text(
+                      _status ??
+                          (_lastChecked == null
+                              ? 'Not checked yet'
+                              : 'Last checked '
+                                  '${_checkedFormat.format(_lastChecked!)}'),
                     ),
-                    title: Text('Version ${release.version} available'),
-                    subtitle: const Text('Downloads, then Android installs it'),
-                    trailing: FilledButton(
-                      onPressed: () => showUpdateDialog(context, release),
-                      child: const Text('Install'),
-                    ),
+                    trailing: _checking
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : FilledButton.tonal(
+                            onPressed: _checkNow,
+                            child: const Text('Check now'),
+                          ),
                   ),
+                  if (release != null)
+                    ListTile(
+                      leading: Icon(
+                        Icons.system_update_alt,
+                        color: theme.colorScheme.primary,
+                      ),
+                      title: Text('Version ${release.version} available'),
+                      subtitle: const Text('Downloads, then Android installs it'),
+                      trailing: FilledButton(
+                        onPressed: () => showUpdateDialog(context, release),
+                        child: const Text('Install'),
+                      ),
+                    ),
+                ],
                 const Divider(height: 32),
                 SettingsHeader('About'),
                 ListTile(
