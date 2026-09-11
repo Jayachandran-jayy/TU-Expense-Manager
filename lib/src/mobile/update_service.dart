@@ -215,6 +215,12 @@ class UpdateService {
   /// going quiet for another week.
   Future<UpdateCheck> check() async {
     final current = await currentVersion();
+    
+    // F-Droid builds must not update themselves.
+    if (const bool.fromEnvironment('FDROID_BUILD', defaultValue: false)) {
+      return UpdateCheck.upToDate(current);
+    }
+
     try {
       final response = await _client.get(
         Uri.https('api.github.com', '/repos/$kUpdateRepo/releases/latest'),
@@ -253,6 +259,7 @@ class UpdateService {
   /// only when there is something to install. Switched off, not yet due,
   /// offline, or already current all come back null and say nothing.
   Future<AppRelease?> checkOnLaunch() async {
+    if (const bool.fromEnvironment('FDROID_BUILD', defaultValue: false)) return null;
     if (!await UpdatePrefs.instance.autoCheckEnabled()) return null;
     final due = isCheckDue(
       lastChecked: await UpdatePrefs.instance.lastChecked(),

@@ -22,3 +22,7 @@ const int kNoteMaxLength = 140;
 /// Paise. Amounts are doubles, so three ways through ₹0.10 cannot land exactly;
 /// anything under half a paisa is a rounding artefact rather than a real gap.
 const double kSplitTolerance = 0.005;
+
+/// True when compiled with `--dart-define=FDROID_BUILD=true`. Disables the
+/// auto-updater to comply with F-Droid's inclusion policies.
+const bool isFDroidBuild = bool.fromEnvironment('FDROID_BUILD', defaultValue: false);

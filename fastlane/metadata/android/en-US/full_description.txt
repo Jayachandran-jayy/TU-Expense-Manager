@@ -1,0 +1,14 @@
+**TU Expense Tracker** is a modern personal finance app designed for simplicity, privacy, and speed.
+
+Instead of manually typing every daily expense or giving third-party apps access to your bank accounts, TU Expense Tracker **automatically reads your incoming bank transaction SMS alerts** directly on your device.
+
+* **100% Private & Offline First**: Everything stays strictly on your phone in a local SQLite database. No data ever leaves your device.
+* **Zero Manual Effort for Routine Purchases**: Categorize a store once (e.g., *Swiggy → Food*), and the app remembers it forever.
+* **Smart Multi-Category Splitting**: Easily split multi-item receipts across several categories.
+* **Beautiful Modern UI**: Built with Flutter featuring smooth rounded fintech cards, vibrant category emojis, customizable accent palettes, and a true battery-saving OLED pitch black mode.
+* **Automated Bank SMS Ingestion**: Reads transactional SMS from major banks and UPI gateways in real time without waking up unnecessary background services.
+* **Visual Spending Dashboard**: Interactive charts, trend analysis, and multi-month comparison.
+* **Fast Search**: Search notes and merchant names across your entire ledger with zero lag.
+* **1-Click Spreadsheet Backup**: Export your entire financial history to a standard `.xlsx` workbook viewable directly in Google Sheets or Excel.
+
+Take back control of your finances without sacrificing your privacy!
