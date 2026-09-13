@@ -119,11 +119,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     ];
 
     // From the unadded-SMS inbox: the message failed a full parse, but the
-    // amount alone is often still readable. Left blank, as today, when it
-    // isn't — the field stays editable either way.
+    // amount and payment method alone are often still readable. Left blank, as
+    // today, when they aren't — the fields stay editable either way.
     if (widget.initialSmsBody case final String body) {
       final double? amount = SmsParser.extractAmountOnly(body);
       if (amount != null) _amountController.text = amount.toStringAsFixed(2);
+
+      final String? instrument = SmsParser.extractInstrumentOnly(body);
+      if (instrument != null && instrument.isNotEmpty) {
+        if (!_addedPaymentTypes.contains(instrument) &&
+            !_basePaymentTypes.contains(instrument) &&
+            !widget.paymentTypes.contains(instrument)) {
+          _addedPaymentTypes.add(instrument);
+        }
+        _paymentType = instrument;
+      }
     }
   }
 
@@ -371,6 +381,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       if (!mounted) return;
 
       if (id > 0) {
+        if (!_basePaymentTypes.contains(_paymentType)) {
+          await AppDatabase.instance.addPaymentMethod(_paymentType);
+          if (!mounted) return;
+        }
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

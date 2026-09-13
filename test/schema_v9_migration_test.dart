@@ -15,6 +15,8 @@ void main() {
       expect(cleanMerchantName('SWIGGY'), 'SWIGGY');
       expect(cleanMerchantName('  UPI_  Tea Stall   '), 'Tea Stall');
       expect(cleanMerchantName('UPI'), 'UPI');
+      expect(cleanMerchantName('SV2512112258548450219373@'), 'SV2512112258548450219373');
+      expect(cleanMerchantName('UPI_SV2512112258548450219373@ '), 'SV2512112258548450219373');
     });
 
     test('migration transforms merchant mappings, preserving non-UPI rule on collision', () {
