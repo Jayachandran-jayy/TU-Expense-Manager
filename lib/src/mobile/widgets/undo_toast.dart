@@ -101,9 +101,14 @@ class _UndoToastEntry {
 /// Wraps [child] and draws an animated undo-toast card floating above the
 /// bottom of the widget when an action is triggered via [controllerOf].
 class UndoToast extends StatefulWidget {
-  const UndoToast({super.key, required this.child});
+  const UndoToast({
+    super.key,
+    required this.child,
+    this.controller,
+  });
 
   final Widget child;
+  final UndoToastController? controller;
 
   /// Returns the nearest [UndoToastController] in the tree.
   static UndoToastController controllerOf(BuildContext context) {
@@ -114,12 +119,21 @@ class UndoToast extends StatefulWidget {
     return scope!.controller;
   }
 
+  /// Returns the nearest [UndoToastController] in the tree, or null if none found.
+  static UndoToastController? maybeControllerOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<_UndoToastScope>()
+        ?.controller;
+  }
+
   @override
   State<UndoToast> createState() => _UndoToastState();
 }
 
 class _UndoToastState extends State<UndoToast> {
-  final UndoToastController _controller = UndoToastController();
+  late final UndoToastController _controller =
+      widget.controller ?? UndoToastController();
+  late final bool _ownsController = widget.controller == null;
 
   @override
   void initState() {
@@ -130,7 +144,9 @@ class _UndoToastState extends State<UndoToast> {
   @override
   void dispose() {
     _controller.removeListener(_rebuild);
-    _controller.dispose();
+    if (_ownsController) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 

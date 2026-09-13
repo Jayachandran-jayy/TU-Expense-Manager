@@ -797,6 +797,11 @@ Two consequences worth knowing:
   merchant (`COLLATE NOCASE` on the column, the mappings key and the natural-key index), and
   the ledger now folds case-only variants onto the most common spelling on read. Only the UI
   ever showed them as two.
+- **Payment methods are canonicalised against active merge rules.** Custom payment methods
+  from the `payment_methods` table are resolved against existing card and account aliases before
+  populating duplicate suggestion counts or manual transaction pickers. Already-merged aliases
+  fold into their canonical target, preventing phantom 0-count duplicate suggestions or clutter
+  in the active cards list.
 
 The Deleted section still shows the label a transaction was actually filed under, not the
 merged name: a tombstone is a record of what was removed, and its merchant is part of the

@@ -30,6 +30,7 @@ class MergeNamesScreen extends StatefulWidget {
     required this.kind,
     this.preselect,
     this.onChanged,
+    this.database,
   });
 
   final NameKind kind;
@@ -42,12 +43,16 @@ class MergeNamesScreen extends StatefulWidget {
   /// reloads on leaving the tab.
   final Future<void> Function()? onChanged;
 
+  /// Injected database instance for tests; defaults to [AppDatabase.instance].
+  final AppDatabase? database;
+
   @override
   State<MergeNamesScreen> createState() => _MergeNamesScreenState();
 }
 
 class _MergeNamesScreenState extends State<MergeNamesScreen> {
-  final AppDatabase _db = AppDatabase.instance;
+  late final AppDatabase _db = widget.database ?? AppDatabase.instance;
+  final UndoToastController _undoToastController = UndoToastController();
 
   bool _loading = true;
   NameAliases _aliases = NameAliases.empty;
@@ -70,6 +75,12 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _undoToastController.dispose();
+    super.dispose();
+  }
+
   String _nameOf(ExpenseTxn t) =>
       widget.kind == NameKind.merchant ? t.merchant : t.paymentType;
 
@@ -84,6 +95,7 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
     ]);
     if (!mounted) return;
 
+    final NameAliases aliases = results[1] as NameAliases;
     final counts = <String, int>{};
     final labels = <String, Set<String>>{};
     for (final ExpenseTxn t in results[0] as List<ExpenseTxn>) {
@@ -94,13 +106,14 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
     
     if (widget.kind == NameKind.card && results.length > 2) {
       for (final String pm in results[2] as List<String>) {
-        counts.putIfAbsent(pm, () => 0);
-        labels.putIfAbsent(pm, () => <String>{pm});
+        final String canonical = aliases.resolve(NameKind.card, pm);
+        counts.putIfAbsent(canonical, () => 0);
+        (labels[canonical] ??= <String>{}).add(pm);
       }
     }
 
     setState(() {
-      _aliases = results[1] as NameAliases;
+      _aliases = aliases;
       _counts = counts;
       _labels = labels;
       _loading = false;
@@ -174,7 +187,7 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    UndoToast.controllerOf(context).show(
+    _undoToastController.show(
       message: message,
       onUndo: () async {
         await _db.setAliases(widget.kind, before);
@@ -276,6 +289,7 @@ class _MergeNamesScreenState extends State<MergeNamesScreen> {
         if (!didPop) _clearSelection();
       },
       child: UndoToast(
+        controller: _undoToastController,
         child: Scaffold(
           appBar: _appBar(),
           floatingActionButton: widget.kind == NameKind.card
@@ -392,37 +406,41 @@ class _SuggestionCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
+      clipBehavior: Clip.antiAlias,
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            for (final String name in group)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: <Widget>[
-                    Icon(Icons.check_circle,
-                        size: 18, color: theme.colorScheme.primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(name,
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                    Text('${counts[name] ?? 0}',
-                        style: theme.textTheme.bodySmall),
-                  ],
+      child: InkWell(
+        onTap: onMerge,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (final String name in group)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.check_circle,
+                          size: 18, color: theme.colorScheme.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(name,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                      Text('${counts[name] ?? 0}',
+                          style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.tonal(
+                  onPressed: onMerge,
+                  child: Text('Merge these ${group.length}'),
                 ),
               ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.tonal(
-                onPressed: onMerge,
-                child: Text('Merge these ${group.length}'),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
