@@ -1,5 +1,6 @@
 import 'package:excel/excel.dart' hide Border, BorderStyle, TextSpan;
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:tu_expense_tracker/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -3013,6 +3014,59 @@ void main() {
         paymentTypeOptions(transactions, merchants: <String>{'AMAZON'}),
         <String>['Card Beta'],
       );
+    });
+  });
+
+  group('TransactionActionsSheet · Edit merchant', () {
+    testWidgets('renders Edit merchant option and returns TxnAction.editMerchant on tap', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final sampleTxn = ExpenseTxn(
+        id: 1,
+        date: DateTime(2026, 9, 13, 10, 0),
+        amount: 506.90,
+        merchant: 'SV2512112258548450219373',
+        categoryId: 1,
+        categoryName: 'Uncategorized',
+        paymentType: 'HDFC Bank Card 8174',
+        direction: TxnDirection.debit,
+        reference: '789574846858',
+      );
+
+      TxnAction? tappedAction;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                tappedAction = await showModalBottomSheet<TxnAction>(
+                  context: context,
+                  builder: (_) => TransactionActionsSheet(
+                    txn: sampleTxn,
+                    money: appMoneyFormat(),
+                    dateFormat: DateFormat('EEE, d MMM yyyy'),
+                  ),
+                );
+              },
+              child: const Text('Open Sheet'),
+            ),
+          ),
+        ),
+      ));
+
+      await tester.tap(find.text('Open Sheet'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit merchant'), findsOneWidget);
+      expect(find.text('SV2512112258548450219373'), findsWidgets);
+
+      await tester.tap(find.text('Edit merchant'));
+      await tester.pumpAndSettle();
+
+      expect(tappedAction, TxnAction.editMerchant);
     });
   });
 }

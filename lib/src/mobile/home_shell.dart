@@ -608,6 +608,91 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     _toast(note.isEmpty ? 'Note removed' : 'Note saved');
   }
 
+  /// Directly renames the merchant on a transaction, with an optional toggle
+  /// to update all other transactions that share the same original raw merchant.
+  Future<void> _editMerchant(ExpenseTxn txn) async {
+    final TextEditingController controller =
+        TextEditingController(text: txn.merchant);
+    controller.selection =
+        TextSelection.collapsed(offset: controller.text.length);
+
+    bool updateAll = false;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogCtx) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
+          title: const Text('Edit Merchant'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              TextField(
+                controller: controller,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: 'Merchant Name',
+                  border: const OutlineInputBorder(),
+                  helperText: '${_money.format(txn.amount)} · ${txn.paymentType}',
+                ),
+              ),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                value: updateAll,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text(
+                  'Update all transactions with this ID/merchant',
+                  style: TextStyle(fontSize: 13),
+                ),
+                onChanged: (bool? val) {
+                  setDialogState(() => updateAll = val ?? false);
+                },
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final String newMerchant = controller.text.trim();
+    controller.dispose();
+    if (!mounted || confirmed != true) return;
+
+    if (newMerchant.isEmpty || newMerchant == txn.merchant) return;
+
+    final String oldMerchant = txn.merchant;
+    await _db.updateTransactionMerchant(
+      transactionId: txn.id,
+      newMerchant: newMerchant,
+      updateAllMatching: updateAll,
+    );
+    await _load();
+    if (!mounted) return;
+
+    UndoToast.controllerOf(context).show(
+      message: 'Merchant updated to "$newMerchant"',
+      onUndo: () async {
+        await _db.updateTransactionMerchant(
+          transactionId: txn.id,
+          newMerchant: oldMerchant,
+          updateAllMatching: updateAll,
+        );
+        if (!mounted) return;
+        await _load();
+      },
+    );
+  }
+
   /// Saves the merchant default, asking first whether history should move with
   /// it. Returns how many past transactions were re-tagged.
   Future<int> _setMerchantDefault(
@@ -744,6 +829,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         await _editNote(txn);
       case TxnAction.split:
         await _splitTransaction(txn);
+      case TxnAction.editMerchant:
+        await _editMerchant(txn);
       case TxnAction.mergeMerchant:
         await _openMerge(NameKind.merchant, txn.merchant);
       case TxnAction.mergeCard:

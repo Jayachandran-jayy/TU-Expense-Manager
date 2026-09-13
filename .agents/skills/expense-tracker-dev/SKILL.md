@@ -88,7 +88,11 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
   - **No Keyword Scanning for Direction**: Transaction direction (debit vs. credit) comes strictly from the matched regex template, not keyword scans (prevents issues with merchant names containing words like "CREDIT").
   - **Flexible Merchant Separators & Time Formats**: Templates flexibly match `@`, `at`, `to`, `towards`, and `for` merchant separators, with support for timestamps with or without seconds (`HH:mm[:ss]` and optional `am`/`pm`).
   - **No Clock Time Fallback**: UPI alerts have no clock time; the parser adopts the SMS arrival time if it falls on the same date, otherwise defaulting to midnight.
-  - **Merchant Gateway Prefix Stripping (`cleanMerchantName`)**: Automatically strips bank gateway transport prefixes (`UPI_`, `UPI-`, `UPI/`, `UPI `) from raw merchant strings at SMS parse time while preserving original merchant casing and non-empty fallbacks.
+  - **Merchant Gateway Prefix & Trailing Symbol Stripping (`cleanMerchantName`, `tuCleanMerchantName`)**: Automatically strips bank gateway transport prefixes (`UPI_`, `UPI-`, `UPI/`, `UPI `) and trailing `@` symbols from raw merchant strings at SMS parse time while preserving original merchant casing and non-empty fallbacks.
+  - **HDFC RuPay Card UPI Template (`hdfc_card_upi`)**: Dedicated template matching multiline and single-line RuPay credit card UPI debit alerts (`Txn Rs.<amount> On <card> At <merchant> by UPI <ref> On <date>`), capturing short dates (`DD-MM` or `DD/MM`) and inferring year from message arrival (`receivedAt?.year ?? DateTime.now().year`) with `hasExplicitTime: false`.
+  - **Payment Method Auto-Persistence**: Automatically saves `sms.paymentType` into the `payment_methods` table on ingestion.
+  - **Instrument Auto-Extraction (`extractInstrumentOnly`)**: Extracts payment instruments (e.g. `HDFC Bank Card 8174`, `SBI A/c *1234`) directly from SMS bodies when prefilling manual entry in `AddTransactionScreen`.
+  - **Transaction Merchant Rename (`updateTransactionMerchant`)**: Dedicated "Edit merchant" action in `TransactionActionsSheet` and `HomeShell` allows renaming raw terminal or gateway IDs directly on transactions, with an optional checkbox to update all past matching transactions.
 - **Testing Safety Rule**: **NEVER test or install builds on real physical devices** (including CMF Phone 1 or any other device connected via wireless debugging or USB) because they hold real user financial data. **ALWAYS use an Android Virtual Device (VD emulator, e.g., `emulator-5554`) for all testing, verification, and inspection.**
 - **Docker Environment Rule**: **STRICTLY use the local Docker server on your development machine.** **NEVER touch, connect to, or execute commands on the ZIMA OS Docker instance.**
 - **Notes**: Notes are sanitized using `cleanNote()`, collapsing white space and capping notes at 140 characters (`kNoteMaxLength`).
@@ -153,18 +157,20 @@ When filters change:
 
 ## 5. Database Schema Reference
 
-SQLite database runs on version 9 (`kSchemaVersion = 9`):
-- `categories`: Available expense categories (`id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL COLLATE NOCASE, icon TEXT NOT NULL DEFAULT ''`).
+SQLite database runs on version 14 (`kSchemaVersion = 14`):
+- `categories`: Available expense categories (`id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL COLLATE NOCASE, icon TEXT NOT NULL DEFAULT '', color INTEGER`).
 - `merchant_mappings`: Direct `merchant_name` (PK, NOCASE) to `category_id` mapping.
 - `name_aliases`: Merged merchant or payment type labels.
 - `transactions`: Core transaction records.
 - `transaction_splits`: Category & amount breakdown lines for split transactions.
 - `deleted_transactions`: Tombstone keys.
 - `app_meta`: Persistent metadata (e.g., `last_scanned_sms_date`).
+- `payment_methods`: Table tracking unique payment instruments and methods (`name TEXT PRIMARY KEY COLLATE NOCASE`), auto-populated from parsed SMS alerts and manual entries.
 
 > [!NOTE]
 > - In schema v8, the `icon` column stores custom category emojis. When empty, `categoryEmoji(name)` falls back to seeded emojis and smart keyword matching.
 > - In schema v9, bank gateway transport prefixes (`UPI_`, `UPI-`, `UPI/`, `UPI `) are automatically stripped across `transactions`, `merchant_mappings`, `deleted_transactions`, and `name_aliases` during migration, with automatic collision resolution preserving non-UPI category mappings and deduplicating matching natural keys.
+> - In schema v14, the `payment_methods` table is introduced to persist discovered accounts and cards so they remain selectable across manual entry and filtering without being lost if transactions are modified.
 > - For split transactions, `transactions.category_id` is a denormalized cache storing the ID of the split line with the highest amount. This dominant category is used for fallback sorting and display.
 
 ---

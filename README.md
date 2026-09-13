@@ -239,6 +239,7 @@ actually carries.
 | opens with "Spent", merchant after " At " | `Spent Rs.122.02 On BANK Card 6824 At MERCHANT On 2026-08-13:07:19:26` | debit |
 | "Sent … From … To …", one field per line | `Sent Rs.18.00` / `From BANK A/C *0444` / `To PAYEE` / `On 10/08/26` / `Ref 213313774670` | debit |
 | "spent using", merchant after the date | `INR 160.00 spent using BANK Card XX8008 on 11-Aug-26 on MERCHANT.` | debit |
+| HDFC RuPay Card UPI alert | `Txn Rs.506.90 On HDFC Bank Card 8174 At SV2512112258548450219373@ by UPI 789574846858 On 13-09` | debit |
 
 **Unconfirmed** — written from wording that is common across issuers, *not* from a real
 message. Replace them with the genuine body when one turns up:
@@ -269,9 +270,11 @@ Notes on the design:
   but `\s` does, so the captures are `[^\n]*?` joined by `\s+` — the same pattern also
   matches the flattened single-line form you get from pasting.
 - One `_parseDate` covers every shape seen: `dd-MM-yyyy hh:mm:ss am/pm`,
-  `yyyy-MM-dd:HH:mm:ss`, `dd/MM/yy`, `dd-MM-yy HH:mm:ss`, `dd-MMM-yy` and `ddMMMyy`.
-  Two-digit years pivot to `2000 + yy`. Ranges are checked explicitly because
-  `DateTime` silently rolls month 13 over into the next January.
+  `yyyy-MM-dd:HH:mm:ss`, `dd/MM/yy`, `dd-MM-yy HH:mm:ss`, `dd-MMM-yy`, `ddMMMyy`,
+  and short dates `dd-MM` or `dd/MM`. Two-digit years pivot to `2000 + yy`. Short dates
+  infer the year from the SMS arrival date (`receivedAt?.year ?? DateTime.now().year`)
+  with `hasExplicitTime: false`. Ranges are checked explicitly because `DateTime`
+  silently rolls month 13 over into the next January.
 - Timestamps are converted by hand rather than with `DateFormat`, so lowercase `am`
   and uppercase `AM` both parse with no locale data initialization. 12 am maps to
   `00:00` and 12 pm to `12:00`.
@@ -282,9 +285,15 @@ Notes on the design:
   same timestamp — so ingestion stays idempotent.
 - `parse()` returns `null` when no template matches, which is how OTPs, promos
   and statement alerts are filtered out.
-- Bank transport prefixes (`UPI_`, `UPI-`, `UPI/`, `UPI `) are automatically stripped
-  from raw merchant names via `cleanMerchantName` at parse time while preserving the merchant's
-  original text casing.
+- Bank transport prefixes (`UPI_`, `UPI-`, `UPI/`, `UPI `) and trailing `@` symbols
+  (common on bank terminal and gateway IDs) are automatically stripped from raw merchant
+  names via `cleanMerchantName` at parse time while preserving the merchant's original
+  text casing.
+- Discovered accounts and cards are automatically stored in the `payment_methods` table
+  on ingestion, ensuring that payment instruments (e.g. `HDFC Bank Card 8174`) immediately
+  appear in manual entry and filter lists.
+- Manual transaction creation from SMS text automatically extracts the payment instrument
+  via `extractInstrumentOnly`, pre-filling and selecting it seamlessly.
 
 ### Database
 
@@ -710,9 +719,12 @@ Four facets, accessible via modern filter trigger buttons with count badges and 
 The list is the working surface — there is nowhere else to go to change something:
 
 - **Tap any transaction** to open its actions sheet — amount, card, date, categories and
-  any note, over **Change category**, **Add / Edit note**, **Split** and **Delete**.
+  any note, over **Change category**, **Edit merchant**, **Add / Edit note**, **Split** and **Delete**.
   Uncategorized rows are flagged in the error color. A split row's pill names its first
   category and counts the rest ("Grocery +2"); the sheet lists them all with their amounts.
+- **Edit merchant** allows renaming cryptic gateway or terminal IDs (e.g., `SV2512112258548450219373`)
+  into readable merchant names directly from the ledger. An optional checkbox lets you apply
+  the new merchant name to all past transactions with the same original name at once.
 - **Add a note** to record why a charge happened. It appears on the row just right of the
   category pill, and is matched by the search box. Clearing the field and saving removes
   it — there is no separate delete.
