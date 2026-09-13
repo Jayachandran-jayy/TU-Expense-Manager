@@ -129,6 +129,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   late final AppDatabase _db = widget.database ?? AppDatabase.instance;
   late final SmsSource _sms = widget.smsSource ?? SmsSource();
+  final UndoToastController _undoToastController = UndoToastController();
 
   final NumberFormat _money = appMoneyFormat();
   final DateFormat _dateFormat = appDateFormat();
@@ -205,6 +206,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     AutoSync.instance.stop();
     ConnectionMonitor.instance.stop();
+    _undoToastController.dispose();
     super.dispose();
   }
 
@@ -679,7 +681,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     await _load();
     if (!mounted) return;
 
-    UndoToast.controllerOf(context).show(
+    _undoToastController.show(
       message: 'Merchant updated to "$newMerchant"',
       onUndo: () async {
         await _db.updateTransactionMerchant(
@@ -771,7 +773,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    UndoToast.controllerOf(context).show(
+    _undoToastController.show(
       message: gone.length == 1
           ? 'Deleted ${gone.single.merchant}'
           : 'Deleted ${gone.length} transactions',
@@ -923,7 +925,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   Future<void> _openAddTransaction() async {
     final view = _derive();
     final customTypes = await AppDatabase.instance.paymentMethods();
-    final allTypes = <String>{...view.paymentTypes, ...customTypes}.toList()..sort();
+    final aliases = await AppDatabase.instance.aliases();
+    final resolvedCustom =
+        customTypes.map((pm) => aliases.resolve(NameKind.card, pm));
+    final allTypes =
+        <String>{...view.paymentTypes, ...resolvedCustom}.toList()..sort();
     
     if (!mounted) return;
     final bool? added = await Navigator.of(context).push<bool>(
@@ -1120,6 +1126,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         if (!didPop) _clearSelection();
       },
       child: UndoToast(
+        controller: _undoToastController,
         child: Scaffold(
         // Selection only ever happens on the ledger, so it outranks the tab.
         appBar: selecting

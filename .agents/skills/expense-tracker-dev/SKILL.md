@@ -151,7 +151,11 @@ When filters change:
 - **`UndoToast` Floating Custom Notification (`lib/src/mobile/widgets/undo_toast.dart`)**:
   - **Overlay Queue**: Replaces native `SnackBar` for destructive actions (deletions, merges). Floats above the bottom navigation bar with a dark card UI.
   - **Animation & Dismiss**: Pops in via scale/fade. Auto-dismisses after 10 seconds via a visible shrinking `LinearProgressIndicator` timer bar at the bottom of the card, or manually via an `X` icon.
-  - **Context Requirement**: Every screen utilizing the toast (e.g., `HomeShell`, `MergeNamesScreen`, `CategoriesScreen`) must wrap its root `Scaffold` in an `UndoToast()` widget to provide local scoped state. Call via `UndoToast.controllerOf(context).show(message: ..., onUndo: () async { ... });`.
+  - **Context & Controller Support**: Screens can either wrap their root `Scaffold` in `UndoToast(controller: _controller, child: ...)` passing a dedicated `UndoToastController`, or call `UndoToast.controllerOf(context).show(...)` / `UndoToast.maybeControllerOf(context)`.
+- **Payment Method Alias Resolution in Deduplication & Entry (`MergeNamesScreen`, `HomeShell._openAddTransaction`)**:
+  - Payment methods loaded from the `payment_methods` table are resolved through `NameAliases` (`aliases.resolve(NameKind.card, pm)`).
+  - Already-merged cards fold cleanly into their canonical card name, preventing phantom duplicate merge suggestions under "Looks like duplicates" and redundant 0-count entries in "All cards & accounts".
+  - Suggestion cards (`_SuggestionCard`) are interactive via `InkWell` so tapping anywhere on the card or the button initiates the merge dialog.
 
 ---
 
