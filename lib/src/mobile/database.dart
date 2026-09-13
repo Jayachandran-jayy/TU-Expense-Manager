@@ -1270,7 +1270,7 @@ class AppDatabase {
         ? mapping.first['category_id'] as int
         : await uncategorizedId();
 
-    return db.insert(
+    final id = await db.insert(
       'transactions',
       <String, Object?>{
         'amount': sms.amount,
@@ -1284,6 +1284,16 @@ class AppDatabase {
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+
+    if (id > 0 && sms.paymentType.isNotEmpty && sms.paymentType != 'Unknown') {
+      await db.insert(
+        'payment_methods',
+        <String, Object?>{'name': sms.paymentType},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+
+    return id;
   }
 
   /// Inserts a transaction created by hand — for cash entries and manual logging.
@@ -1411,6 +1421,45 @@ class AppDatabase {
       where: 'id = ?',
       whereArgs: <Object?>[transactionId],
     );
+  }
+
+  /// Updates the merchant name for a transaction.
+  /// If [updateAllMatching] is true, all transactions sharing the same original
+  /// raw merchant name are updated to [newMerchant].
+  Future<void> updateTransactionMerchant({
+    required int transactionId,
+    required String newMerchant,
+    bool updateAllMatching = false,
+  }) async {
+    final db = await database;
+    final clean = newMerchant.trim();
+    if (clean.isEmpty) return;
+
+    if (updateAllMatching) {
+      final rows = await db.query(
+        'transactions',
+        columns: <String>['merchant'],
+        where: 'id = ?',
+        whereArgs: <Object?>[transactionId],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) {
+        final rawMerchant = rows.first['merchant'] as String;
+        await db.update(
+          'transactions',
+          <String, Object?>{'merchant': clean},
+          where: 'merchant = ? COLLATE NOCASE',
+          whereArgs: <Object?>[rawMerchant],
+        );
+      }
+    } else {
+      await db.update(
+        'transactions',
+        <String, Object?>{'merchant': clean},
+        where: 'id = ?',
+        whereArgs: <Object?>[transactionId],
+      );
+    }
   }
 
   /// How many past transactions [setMerchantDefault] would re-tag, using the

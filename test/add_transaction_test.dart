@@ -197,6 +197,47 @@ void main() {
           tester.widget<TextFormField>(find.byType(TextFormField).first);
       expect(amountField.controller?.text, isEmpty);
     });
+
+    testWidgets('pre-fills the payment card and selects it from SMS text',
+        (tester) async {
+      setLargeViewport(tester);
+
+      await tester.pumpWidget(buildScreen(
+        initialSmsBody: 'Txn Rs.506.90\n'
+            'On HDFC Bank Card 8174\n'
+            'At SV2512112258548450219373@ \n'
+            'by UPI 789574846858\n'
+            'On 13-09',
+      ));
+      await tester.pumpAndSettle();
+
+      final amountField =
+          tester.widget<TextFormField>(find.byType(TextFormField).first);
+      expect(amountField.controller?.text, '506.90');
+
+      // The card choice chip should be present and selected
+      final cardChip = find.widgetWithText(ChoiceChip, 'HDFC Bank Card 8174');
+      expect(cardChip, findsOneWidget);
+      expect(tester.widget<ChoiceChip>(cardChip).selected, isTrue);
+    });
+
+    testWidgets('pre-fills bank account instrument from SMS text',
+        (tester) async {
+      setLargeViewport(tester);
+
+      await tester.pumpWidget(buildScreen(
+        initialSmsBody: 'Amt Deducted! Rs.11500 from your HDFC Bank A/c XX0444 for NEFT',
+      ));
+      await tester.pumpAndSettle();
+
+      final amountField =
+          tester.widget<TextFormField>(find.byType(TextFormField).first);
+      expect(amountField.controller?.text, '11500.00');
+
+      final acctChip = find.widgetWithText(ChoiceChip, 'HDFC Bank A/c XX0444');
+      expect(acctChip, findsOneWidget);
+      expect(tester.widget<ChoiceChip>(acctChip).selected, isTrue);
+    });
   });
 
   // =========================================================================

@@ -96,6 +96,7 @@ const String _date = r'(?<date>'
     r'|\d{1,2}-[A-Za-z]{3}-\d{2,4}' //                          11-Aug-26
     r'|\d{1,2}[A-Za-z]{3}\d{2,4}' //                            11Aug26
     r'|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}' //                        10/08/26
+    r'|\d{1,2}[-/]\d{1,2}' //                                   13-09, 01-09
     r')';
 
 /// Optional "Ref 213313774670" / "Refno 123456789" / "UTR: 123456789" directly
@@ -108,6 +109,17 @@ class SmsParser {
   /// they always win over the broader unverified ones below them.
   static final List<SmsTemplate> templates = <SmsTemplate>[
     // -- Verified against real messages -----------------------------------
+
+    /// `Txn Rs.506.90\nOn HDFC Bank Card 8174\nAt SV2512112258548450219373@ \nby UPI 789574846858\nOn 13-09...`
+    /// `Txn Rs.755.00\nOn HDFC Bank Card 8174\nAt hathwaymobileapp.76062993 \nby UPI 250214536533\nOn 01-09...`
+    SmsTemplate(
+      id: 'hdfc_card_upi',
+      direction: TxnDirection.debit,
+      pattern: _re('(?:Txn|Spent)(?:\\s+of)?\\s+$_cur$_amt\\s+(?:On|From)\\s+'
+          r'(?<instrument>[^\n]*?)\s+(?:At|to|@)\s*(?<merchant>[^\n]*?)\s+'
+          r'(?:by|via|Ref)\s*(?:UPI)?\s*(?<ref>\w+)\s+(?:On\s+)?'
+          '$_date'),
+    ),
 
     /// `INR 204.00 spent on YES BANK Card X2858 @UPI_GEORGE EGG CENTRE
     ///  13-08-2026 09:21:35 am. Avl Lmt INR 281,496.08.`
@@ -250,6 +262,41 @@ class SmsParser {
     return (amount == null || amount <= 0) ? null : amount;
   }
 
+  /// Standalone extraction of a card or account instrument from an SMS message
+  /// that can be used to pre-fill the Payment Method in manual entry flows.
+  static String? extractInstrumentOnly(String body) {
+    // 1. If strict parser matches, return its paymentType
+    final parsed = parse(body);
+    if (parsed != null && parsed.paymentType.isNotEmpty && parsed.paymentType != 'Unknown') {
+      return parsed.paymentType;
+    }
+
+    // 2. Loose extraction for bank cards and accounts
+    final RegExp looseRe = RegExp(
+      r'(?:On|From|using|spent on|debited from|credited to|in)\s+(?:your\s+)?'
+      r'(?<instrument>[A-Za-z0-9\s*]+?(?:Bank\s+)?(?:Card|A/[Cc]|Account)\s*[Xx*]*\d+)',
+      caseSensitive: false,
+    );
+    final match = looseRe.firstMatch(body);
+    if (match != null) {
+      final inst = _normalize(_group(match, 'instrument') ?? '');
+      if (inst.isNotEmpty) return inst;
+    }
+
+    // 3. Fallback for standalone Card XXXX or A/C XXXX
+    final RegExp fallbackRe = RegExp(
+      r'\b(?<instrument>(?:[A-Za-z]+\s+)?(?:Card|A/[Cc])\s*[Xx*]*\d+)\b',
+      caseSensitive: false,
+    );
+    final fallbackMatch = fallbackRe.firstMatch(body);
+    if (fallbackMatch != null) {
+      final inst = _normalize(_group(fallbackMatch, 'instrument') ?? '');
+      if (inst.isNotEmpty) return inst;
+    }
+
+    return null;
+  }
+
   /// Returns `null` when no template matches, which is how OTPs, promos and
   /// statement alerts get filtered out.
   ///
@@ -267,7 +314,8 @@ class SmsParser {
           double.tryParse((_group(match, 'amount') ?? '').replaceAll(',', ''));
       if (amount == null || amount <= 0) continue;
 
-      final stamp = _parseDate(_group(match, 'date') ?? '');
+      final defaultYear = receivedAt?.year ?? DateTime.now().year;
+      final stamp = _parseDate(_group(match, 'date') ?? '', defaultYear: defaultYear);
       if (stamp == null) continue;
 
       final merchant = cleanMerchantName(_group(match, 'merchant') ?? '');
@@ -335,6 +383,13 @@ class SmsParser {
     caseSensitive: false,
   );
 
+  /// `dd-MM` or `dd/MM` without year, with an optional `HH:mm[:ss]` and `am`/`pm`.
+  static final RegExp _numericShort = RegExp(
+    r'^(\d{1,2})[-/](\d{1,2})'
+    r'(?:\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
+    caseSensitive: false,
+  );
+
   /// `11-Aug-26`, `11Aug26`, `11-Aug-2026`, with an optional `HH:mm[:ss]` and `am`/`pm`.
   static final RegExp _named = RegExp(
     r'^(\d{1,2})-?([A-Za-z]{3})-?(\d{2,4})'
@@ -346,7 +401,7 @@ class SmsParser {
   /// actually carried a clock time. Parsed by hand rather than through
   /// `DateFormat` so lowercase "am" and uppercase "AM" both work with no
   /// locale data initialised, and so a two-digit year can be pivoted to 2000+.
-  static _Stamp? _parseDate(String raw) {
+  static _Stamp? _parseDate(String raw, {int? defaultYear}) {
     final value = raw.trim();
 
     final iso = _isoish.firstMatch(value);
@@ -369,6 +424,28 @@ class SmsParser {
         month: int.tryParse(numeric.group(2)!),
         year: numeric.group(3)!,
         match: numeric,
+      );
+    }
+
+    final numericShort = _numericShort.firstMatch(value);
+    if (numericShort != null) {
+      final month = int.tryParse(numericShort.group(2)!);
+      if (month == null) return null;
+      final hasTime = numericShort.group(3) != null;
+      var hour = hasTime ? int.parse(numericShort.group(3)!) : 0;
+      final meridiem = numericShort.group(6)?.toLowerCase();
+      if (meridiem == 'pm' && hour != 12) hour += 12;
+      if (meridiem == 'am' && hour == 12) hour = 0;
+      return _build(
+        year: defaultYear ?? DateTime.now().year,
+        month: month,
+        day: int.parse(numericShort.group(1)!),
+        hour: hour,
+        minute: hasTime ? int.parse(numericShort.group(4)!) : 0,
+        second: (hasTime && numericShort.group(5) != null)
+            ? int.parse(numericShort.group(5)!)
+            : 0,
+        hasTime: hasTime,
       );
     }
 
@@ -456,5 +533,6 @@ String tuCleanMerchantName(String value) {
     RegExp(r'^upi[\s_\-\/]+', caseSensitive: false),
     '',
   );
-  return stripped.isEmpty ? trimmed : stripped;
+  final cleaned = stripped.replaceFirst(RegExp(r'@+$'), '').trim();
+  return cleaned.isEmpty ? trimmed : cleaned;
 }
