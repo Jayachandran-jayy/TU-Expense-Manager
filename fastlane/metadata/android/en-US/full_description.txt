@@ -1,14 +1,18 @@
-**TU Expense Tracker** is a modern personal finance app designed for simplicity, privacy, and speed.
+<p><b>TU Expense Tracker</b> is a modern personal finance app designed for simplicity, privacy, and speed.</p>
 
-Instead of manually typing every daily expense or giving third-party apps access to your bank accounts, TU Expense Tracker **automatically reads your incoming bank transaction SMS alerts** directly on your device.
+<p>Instead of manually typing every daily expense or giving third-party apps access to your bank accounts, TU Expense Tracker <b>automatically reads your incoming bank transaction SMS alerts</b> directly on your device.</p>
 
-* **100% Private & Offline First**: Everything stays strictly on your phone in a local SQLite database. No data ever leaves your device.
-* **Zero Manual Effort for Routine Purchases**: Categorize a store once (e.g., *Swiggy → Food*), and the app remembers it forever.
-* **Smart Multi-Category Splitting**: Easily split multi-item receipts across several categories.
-* **Beautiful Modern UI**: Built with Flutter featuring smooth rounded fintech cards, vibrant category emojis, customizable accent palettes, and a true battery-saving OLED pitch black mode.
-* **Automated Bank SMS Ingestion**: Reads transactional SMS from major banks and UPI gateways in real time without waking up unnecessary background services.
-* **Visual Spending Dashboard**: Interactive charts, trend analysis, and multi-month comparison.
-* **Fast Search**: Search notes and merchant names across your entire ledger with zero lag.
-* **1-Click Spreadsheet Backup**: Export your entire financial history to a standard `.xlsx` workbook viewable directly in Google Sheets or Excel.
+<ul>
+  <li><b>100% Private &amp; Offline First</b>: Everything stays strictly on your phone in a local SQLite database. No data ever leaves your device.</li>
+  <li><b>Zero Manual Effort for Routine Purchases</b>: Categorize a store once (e.g., <i>Swiggy → Food</i>), and the app remembers it forever.</li>
+  <li><b>Smart Multi-Category Splitting</b>: Easily split multi-item receipts across several categories.</li>
+  <li><b>Beautiful Modern UI</b>: Built with Flutter featuring smooth rounded fintech cards, vibrant category emojis, customizable accent palettes, and a true battery-saving OLED pitch black mode.</li>
+  <li><b>Automated Bank SMS Ingestion</b>: Reads transactional SMS from major banks and UPI gateways in real time without waking up unnecessary background services.</li>
+  <li><b>Visual Spending Dashboard</b>: Interactive charts, trend analysis, and multi-month comparison.</li>
+  <li><b>Fast Search</b>: Search notes and merchant names across your entire ledger with zero lag.</li>
+  <li><b>1-Click Spreadsheet Backup</b>: Export your entire financial history to a standard .xlsx workbook viewable directly in Google Sheets or Excel.</li>
+</ul>
 
-Take back control of your finances without sacrificing your privacy!
+<p>Take back control of your finances without sacrificing your privacy!</p>
+
+<p>Feel free to reach out or connect on Instagram: <a href="https://www.instagram.com/hardcoree_gamerr/">@hardcoree_gamerr</a></p>
