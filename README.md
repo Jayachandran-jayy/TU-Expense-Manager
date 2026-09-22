@@ -52,7 +52,16 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 - **Manual Cash Tracking**: Need to record cash payments or transactions from unlinked accounts? Tap **+ Add Transaction** to log entries manually in seconds.
 - **Safe & Idempotent**: Multi-layer deduplication prevents double-counting, even if bank alerts are received multiple times or rescanned.
 
-### 4. 📊 Visual Spending Dashboard & Monthly Reports
+### 4. ✉️ Email Transaction Support (Gmail IMAP & Manual Paste)
+Missing bank SMS alerts due to carrier network drops or telecom delivery issues? TU Expense Tracker bridges the gap with comprehensive email support:
+- **Direct Gmail Connect**: Connect via secure IMAP TLS (`imap.gmail.com:993`) using a standard 16-character Google App Password — no complicated Cloud Console OAuth setup required.
+- **Smart Pre-Filtering**: Scans transaction emails across 7, 14, or 30 days lookback ranges using targeted keyword matching (`debited`, `spent`, `credited`, `received`, `card`, `a/c`).
+- **Selective Manual Verification (No Bulk Auto-Add)**: Browse emails in an intuitive list, search in real-time, and review parsed details in `AddTransactionScreen` before saving to your ledger.
+- **Quick Paste Dialog**: Copy email transaction text directly from any mail app and paste it into the quick paste dialog for instant regex extraction.
+- **Ledger Deduplication Badges**: Emails matching transactions already recorded in your ledger display an `Added` badge to prevent duplicate charges.
+- **Dismiss & Hide**: Dismiss irrelevant notification emails with a single tap.
+
+### 5. 📊 Visual Spending Dashboard & Monthly Reports
 
 - **Interactive charts**: View category breakdowns as pie charts or horizontal bars.
 - **Trend analysis**: Line charts showing daily spend pace compared to previous months.
@@ -62,22 +71,22 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 - **Single-Month Donut Chart**: Clear breakdown of where your money went, ranked by category share with exact amounts.
 - **Multi-Month Comparison Bars**: Compare 2 to 6 months side-by-side to understand spending trends over time.
 
-### 5. 🔍 Fast Search & Interlinked Smart Filters
+### 6. 🔍 Fast Search & Interlinked Smart Filters
 - **Instant Search**: Search notes and merchant names across your entire ledger with zero lag.
 - **Interlinked Facets**: Filter by Month, Category, Merchant, or Card/Account. Filters dynamically constrain each other so you never hit a dead end.
 - **Active Filter Chips**: See all active filters as removable token chips with a single-click **Clear all** button.
 
-### 6. 🔗 Duplicate Cleaner & Name Merging
+### 7. 🔗 Duplicate Cleaner & Name Merging
 Banks often send inconsistent names for the exact same account or shop (e.g., `HDFC Bank A/C *0444`, `BANK A/c XX0444`, or `UPI_SWIGGY`).
 - **Merge Merchants & Accounts**: Combine multiple variations into a single clean display name under **Settings › Cleanup**.
 - **Non-Destructive & Undoable**: Merging only changes the display layer — original bank labels and raw data are never corrupted.
 
-### 7. 🎨 Themes, Pitch Black OLED & Emoji Icon Packs
+### 8. 🎨 Themes, Pitch Black OLED & Emoji Icon Packs
 - **OLED Pitch Black**: True `#000000` pixel shut-off for AMOLED displays to maximize battery life.
 - **8 Curated Accent Colors**: Classic Blue, Crimson Red, Emerald Green, Royal Purple, Sunset Orange, Rose Pink, Teal/Cyan, and Cyber Amber.
 - **Icon Packs & Smart Emoji Avatars**: Choose between Vibrant Emojis (WhatsApp/Fluent style), Clean Minimalist Outlines, or Modern Filled icons with smart keyword auto-matching.
 
-### 8. 💾 Human-Readable Excel Backup & Optional Web Sync
+### 9. 💾 Human-Readable Excel Backup & Optional Web Sync
 - **1-Click Spreadsheet Backup**: Export your entire financial history to a standard `.xlsx` workbook viewable directly in Google Sheets or Excel. Restore with full database validation anytime.
 - **Optional Self-Hosted Web Client**: Spin up the lightweight Docker backend to view your ledger on desktop web browsers and queue edits across your private home network.
 
@@ -294,6 +303,18 @@ Notes on the design:
   appear in manual entry and filter lists.
 - Manual transaction creation from SMS text automatically extracts the payment instrument
   via `extractInstrumentOnly`, pre-filling and selecting it seamlessly.
+
+### Email Parsing & Ingestion Subsystem
+
+The email pipeline (`lib/src/core/email_parser.dart` and `lib/src/mobile/services/email_service.dart`) provides a local, private alternative for capturing bank transactions when SMS alerts fail to arrive:
+
+- **100% On-Device Deterministic Parsing**: Zero cloud or local LLM overhead (0 MB runtime weight, instant evaluation).
+- **HTML Sanitization & Entity Decoding**: `EmailParser.stripHtml` strips markup and handles complex HTML entities including rupee symbols (`₹`, `&#8377;`, `&#x20B9;`), `&amp;`, and `&nbsp;`.
+- **Targeted Bank Templates**: Specialized regex matchers for HDFC Bank, ICICI Bank, SBI Card, Axis Bank, Yes Bank, Kotak Mahindra Bank, IndusInd Bank, and a comprehensive generic card alert fallback.
+- **Direction & Gateway Cleanup**: Direction (`debit` vs `credit`) is assigned from regex structure. Extracted merchants are cleaned via `cleanMerchantName`.
+- **Direct Gmail IMAP over TLS**: Securely connects to `imap.gmail.com:993` using a user-provided 16-character Google App Password. Pre-filters the inbox for financial keywords (`debited`, `spent`, `credited`, `received`, `txn`, `card`, `a/c`) across 7, 14, or 30 days lookback.
+- **Manual Verification First**: Never adds transactions in bulk. Selecting an email launches `AddTransactionScreen` pre-filled with the extracted amount, merchant, instrument, date, and direction for explicit user confirmation.
+- **Duplicate Detection & Dismissal**: Emails matching existing transactions in the ledger display an `Added` badge, and unwanted notifications can be permanently dismissed.
 
 ### Database
 

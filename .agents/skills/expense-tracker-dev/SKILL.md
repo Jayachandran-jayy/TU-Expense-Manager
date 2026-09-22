@@ -96,6 +96,14 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
 - **Testing Safety Rule**: **NEVER test or install builds on real physical devices** (including CMF Phone 1 or any other device connected via wireless debugging or USB) because they hold real user financial data. **ALWAYS use an Android Virtual Device (VD emulator, e.g., `emulator-5554`) for all testing, verification, and inspection.**
 - **Docker Environment Rule**: **STRICTLY use the local Docker server on your development machine.** **NEVER touch, connect to, or execute commands on the ZIMA OS Docker instance.**
 - **Notes**: Notes are sanitized using `cleanNote()`, collapsing white space and capping notes at 140 characters (`kNoteMaxLength`).
+- **Email Parsing & Ingestion Subsystem (`EmailParser`, `EmailService`, `EmailTransactionsScreen`)**:
+  - **Zero-Cloud Local Parsing (`lib/src/core/email_parser.dart`)**: Deterministic regex templates for major Indian card/bank alerts (HDFC, ICICI, SBI Card, Axis, Yes Bank, Kotak, IndusInd, and generic fallback). 0 MB overhead, 0 runtime latency, and 100% offline privacy (no cloud or local LLM required).
+  - **HTML Stripping & Entity Decoding**: `EmailParser.stripHtml()` handles tag removal, script/style deletion, whitespace normalization, and decodes named/hex/decimal HTML entities (`₹`, `&amp;`, `&nbsp;`, `&#8377;`, `&#x20B9;`).
+  - **Direction Integrity**: Direction (`debit` vs `credit`) is strictly determined by matched template rules rather than naive keyword search.
+  - **Conversion to `ParsedSms`**: `EmailTransaction.toParsedSms()` converts parsed emails directly to the core `ParsedSms` representation for consistent downstream validation and database insertion.
+  - **Gmail IMAP TLS Integration (`lib/src/mobile/services/email_service.dart`)**: Connects over TLS to `imap.gmail.com:993` via `enough_mail` using a Gmail 16-character App Password (no GCP OAuth or Cloud Console credentials needed). Pre-filters by transactional keywords (`debited`, `spent`, `credited`, `received`, `txn`, `card`, `a/c`), configurable lookback (7, 14, 30 days), and persists dismissed email IDs in `SharedPreferences`.
+  - **Manual Verification & Prefilled Add Screen**: Emails are NEVER inserted in bulk. Users select an email or paste email text, which navigates to `AddTransactionScreen` pre-filled with parsed amount, merchant, instrument, date, notes, and direction toggle (`Expense` vs `Income/Refund`) for manual verification before saving.
+  - **Duplicate Detection Badge**: Emails matching existing transactions in the ledger by amount, direction, merchant, or reference are marked with an `Added` badge to prevent accidental re-entry.
 
 ---
 
