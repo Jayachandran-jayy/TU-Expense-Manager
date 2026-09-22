@@ -28,6 +28,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     defaultConfig {
         applicationId = "com.tu.expense.manager"
         // You can update the following values to match your application needs.

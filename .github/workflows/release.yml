@@ -58,52 +58,51 @@ jobs:
           keyPassword=$KEY_PASSWORD
           EOF
 
-      # The tag is the single source of truth for the version a release reports:
-      # `v1.2.0` builds an APK that calls itself 1.2.0. Without this the APK takes
-      # its version from pubspec.yaml, which then has to be remembered separately
-      # and silently drifts — v1.0.0, v1.0.1 and v1.0.3 each shipped an APK that
-      # still called itself 1.0.0 build 1, so no device could tell them apart.
-      #
-      # versionCode is the run number rather than anything parsed from the tag.
-      # Android only cares that it increases, and run numbers always do, which
-      # digits taken from a version would not: 1.9.0 -> 1.10.0 goes backwards.
-      - name: Derive the version from the tag
+      # The tag is the source of truth for versionName.
+      # The build number is taken from pubspec.yaml to align with F-Droid and Android
+      # ABI split version code schemes.
+      - name: Derive the version from the tag and pubspec.yaml
         id: version
         run: |
+          BUILD_NUMBER=$(sed -n -E 's/version:\s.+[+]([0-9]+)/\1/p' pubspec.yaml)
+          if [[ -z "$BUILD_NUMBER" ]]; then
+            BUILD_NUMBER="$GITHUB_RUN_NUMBER"
+          fi
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             NAME="${GITHUB_REF_NAME#[vV]}"
-            echo "args=--build-name=$NAME --build-number=$GITHUB_RUN_NUMBER" \
+            echo "args=--build-name=$NAME --build-number=$BUILD_NUMBER" \
               >> "$GITHUB_OUTPUT"
-            echo "Building $GITHUB_REF_NAME as versionName=$NAME " \
-                 "versionCode=$GITHUB_RUN_NUMBER"
+            echo "Building $GITHUB_REF_NAME as versionName=$NAME versionCode=$BUILD_NUMBER"
           else
-            # A manual run has no tag to read, so pubspec.yaml's version stands.
-            echo "args=" >> "$GITHUB_OUTPUT"
-            echo "No tag — taking the version from pubspec.yaml"
+            echo "args=--build-number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "No tag — taking the version from pubspec.yaml (build-number=$BUILD_NUMBER)"
           fi
 
-      - run: flutter build apk --release ${{ steps.version.outputs.args }}
+      - name: Build split-per-ABI APKs
+        run: flutter build apk --release --split-per-abi ${{ steps.version.outputs.args }}
+
+      - name: Build universal APK
+        run: flutter build apk --release ${{ steps.version.outputs.args }}
 
       # Manual runs have no tag to release against, so keep the APK reachable.
-      - name: Upload APK as a build artifact
+      - name: Upload APKs as build artifacts
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: app-release-apks
+          path: build/app/outputs/flutter-apk/*.apk
 
       # Idempotent: attaches to an existing release for this tag rather than
-      # failing, so a re-run can repair a release that is missing its APK.
-      - name: Publish release with APK
+      # failing, so a re-run can repair a release that is missing its APKs.
+      - name: Publish release with APKs
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          APK=build/app/outputs/flutter-apk/app-release.apk
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$APK" --clobber
+            gh release upload "$GITHUB_REF_NAME" build/app/outputs/flutter-apk/*.apk --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$APK" \
+            gh release create "$GITHUB_REF_NAME" build/app/outputs/flutter-apk/*.apk \
               --title "$GITHUB_REF_NAME" \
               --generate-notes
           fi
