@@ -1,7 +1,10 @@
 package com.tu.expense.manager
 
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -49,8 +52,61 @@ class MainActivity : FlutterActivity() {
                     stopListening()
                     result.success(true)
                 }
+                "isFdroidInstalled" -> {
+                    result.success(isFdroidInstalled())
+                }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun isFdroidInstalled(): Boolean {
+        return try {
+            val pm = packageManager
+            val repoIntent = Intent(Intent.ACTION_VIEW, Uri.parse("fdroidrepo://example.com"))
+            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("fdroidapp://com.tu.expense.manager"))
+
+            val hasRepoHandler = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.queryIntentActivities(repoIntent, PackageManager.ResolveInfoFlags.of(0L)).isNotEmpty()
+            } else {
+                @Suppress("DEPRECATION")
+                pm.queryIntentActivities(repoIntent, 0).isNotEmpty()
+            }
+
+            val hasAppHandler = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.queryIntentActivities(appIntent, PackageManager.ResolveInfoFlags.of(0L)).isNotEmpty()
+            } else {
+                @Suppress("DEPRECATION")
+                pm.queryIntentActivities(appIntent, 0).isNotEmpty()
+            }
+
+            if (hasRepoHandler || hasAppHandler) {
+                return true
+            }
+
+            val knownPackages = listOf(
+                "org.fdroid.fdroid",
+                "org.fdroid.fdroid.privileged",
+                "org.fdroid.basic",
+                "com.looker.droidify",
+                "com.machiav3lli.fdroid",
+                "com.aurora.adroid"
+            )
+            for (pkg in knownPackages) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0L))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.getPackageInfo(pkg, 0)
+                    }
+                    return true
+                } catch (_: PackageManager.NameNotFoundException) {
+                }
+            }
+            false
+        } catch (_: Exception) {
+            false
         }
     }
 

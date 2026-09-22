@@ -53,7 +53,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final DateFormat _checkedFormat = DateFormat('d MMM yyyy, h:mm a');
 
-  bool _autoCheck = true;
+  bool _autoCheck = false;
+  bool _isFdroidPresent = false;
   String _version = '';
   String _build = '';
   DateTime? _lastChecked;
@@ -99,6 +100,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final info = await PackageInfo.fromPlatform();
     final auto = await UpdatePrefs.instance.autoCheckEnabled();
     final last = await UpdatePrefs.instance.lastChecked();
+    final isFdroidClient = await isFdroidClientInstalled();
+    final isFdroidInstaller = isFdroidStore(info.installerStore);
 
     const SyncPrefs sync = SyncPrefs.instance;
     final Uri? serverUrl = await sync.baseUrl();
@@ -116,6 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _build = info.buildNumber;
       _autoCheck = auto;
       _lastChecked = last;
+      _isFdroidPresent = isFdroidClient || isFdroidInstaller;
       _serverUrl = serverUrl;
       _syncUser = syncUser;
       _deviceLabel = deviceLabel;
@@ -924,48 +928,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (!isFDroidBuild) ...[
                   const Divider(height: 32),
                   SettingsHeader('Updates'),
-                  SwitchListTile(
-                    value: _autoCheck,
-                    onChanged: _setAutoCheck,
-                    title: const Text('Check automatically'),
-                    subtitle: const Text(
-                      'On launch, at most once a week. Nothing is downloaded '
-                      'without asking.',
+                  if (_isFdroidPresent)
+                    const ListTile(
+                      title: Text('Updates managed externally'),
+                      subtitle: Text(
+                        'An F-Droid or compatible store was detected on this device. Updates are managed through your app store.',
+                      ),
+                    )
+                  else ...[
+                    SwitchListTile(
+                      value: _autoCheck,
+                      onChanged: _setAutoCheck,
+                      title: const Text('Check automatically'),
+                      subtitle: const Text(
+                        'On launch, at most once a week. Disabled by default. '
+                        'Nothing is downloaded without asking.',
+                      ),
                     ),
-                  ),
-                  ListTile(
-                    title: const Text('Check for updates'),
-                    subtitle: Text(
-                      _status ??
-                          (_lastChecked == null
-                              ? 'Not checked yet'
-                              : 'Last checked '
-                                  '${_checkedFormat.format(_lastChecked!)}'),
-                    ),
-                    trailing: _checking
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : FilledButton.tonal(
-                            onPressed: _checkNow,
-                            child: const Text('Check now'),
-                          ),
-                  ),
-                  if (release != null)
                     ListTile(
-                      leading: Icon(
-                        Icons.system_update_alt,
-                        color: theme.colorScheme.primary,
+                      title: const Text('Check for updates'),
+                      subtitle: Text(
+                        _status ??
+                            (_lastChecked == null
+                                ? 'Not checked yet'
+                                : 'Last checked '
+                                    '${_checkedFormat.format(_lastChecked!)}'),
                       ),
-                      title: Text('Version ${release.version} available'),
-                      subtitle: const Text('Downloads, then Android installs it'),
-                      trailing: FilledButton(
-                        onPressed: () => showUpdateDialog(context, release),
-                        child: const Text('Install'),
-                      ),
+                      trailing: _checking
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : FilledButton.tonal(
+                              onPressed: _checkNow,
+                              child: const Text('Check now'),
+                            ),
                     ),
+                    if (release != null)
+                      ListTile(
+                        leading: Icon(
+                          Icons.system_update_alt,
+                          color: theme.colorScheme.primary,
+                        ),
+                        title: Text('Version ${release.version} available'),
+                        subtitle: const Text('Downloads, then Android installs it'),
+                        trailing: FilledButton(
+                          onPressed: () => showUpdateDialog(context, release),
+                          child: const Text('Install'),
+                        ),
+                      ),
+                  ],
                 ],
                 const Divider(height: 32),
                 SettingsHeader('About'),

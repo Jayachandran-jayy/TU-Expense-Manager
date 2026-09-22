@@ -4,7 +4,8 @@
 
 <!-- Flutter only injects INTERNET into the debug and profile manifests, so a
      release build without this line builds fine and then fails every request
-     at runtime. The update check needs it to reach the GitHub releases API. -->
+     at runtime. Required for optional self-hosted server sync, IMAP email sync,
+     and checking for updates. -->
 <uses-permission android:name="android.permission.INTERNET" />
 
 <!-- The app distributes itself as a sideloaded APK, so installing an update
@@ -66,5 +67,19 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="fdroidrepo"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="fdroidapp"/>
+        </intent>
+        <package android:name="org.fdroid.fdroid"/>
+        <package android:name="org.fdroid.fdroid.privileged"/>
+        <package android:name="org.fdroid.basic"/>
+        <package android:name="com.looker.droidify"/>
+        <package android:name="com.machiav3lli.fdroid"/>
+        <package android:name="com.aurora.adroid"/>
     </queries>
 </manifest>
