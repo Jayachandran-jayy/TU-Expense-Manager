@@ -30,6 +30,7 @@ import 'database.dart';
 import 'screens/add_transaction_screen.dart';
 import 'screens/category_picker_sheet.dart';
 import 'screens/deleted_screen.dart';
+import 'screens/email_transactions_screen.dart';
 import 'screens/merge_names_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/split_screen.dart';
@@ -880,6 +881,29 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     ));
   }
 
+  Future<void> _openEmailTransactions() async {
+    final view = _derive();
+    final customTypes = await AppDatabase.instance.paymentMethods();
+    final aliases = await AppDatabase.instance.aliases();
+    final resolvedCustom =
+        customTypes.map((pm) => aliases.resolve(NameKind.card, pm));
+    final allTypes =
+        <String>{...view.paymentTypes, ...resolvedCustom}.toList()..sort();
+
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => EmailTransactionsScreen(
+          categories: _categories,
+          merchants: view.merchants,
+          paymentTypes: allTypes,
+          transactions: _transactions,
+          onChanged: _load,
+        ),
+      ),
+    );
+  }
+
   /// The launch-time update check. Silent unless there is something to install:
   /// a check that is switched off, not yet due, offline or already current all
   /// pass without a word.
@@ -1050,6 +1074,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     return AppBar(
       title: const Text('Transactions'),
       actions: <Widget>[
+        IconButton(
+          tooltip: 'Email transactions',
+          onPressed: _openEmailTransactions,
+          icon: const Icon(Icons.mail_outline),
+        ),
         _inboxAction(),
         if (_scanning)
           const Center(
@@ -1071,6 +1100,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         PopupMenuButton<String>(
           onSelected: (String value) {
             switch (value) {
+              case 'email_transactions':
+                _openEmailTransactions();
               case 'paste_sms':
                 _addSmsManually();
               case 'rescan':
@@ -1080,6 +1111,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             }
           },
           itemBuilder: (_) => const <PopupMenuEntry<String>>[
+            PopupMenuItem<String>(
+              value: 'email_transactions',
+              child: Text('Email transactions'),
+            ),
             PopupMenuItem<String>(
               value: 'paste_sms',
               child: Text('Paste SMS'),
