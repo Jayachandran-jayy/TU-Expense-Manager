@@ -39,6 +39,12 @@ class AddTransactionScreen extends StatefulWidget {
     this.merchants = const <String>[],
     this.paymentTypes = const <String>[],
     this.initialSmsBody,
+    this.initialAmount,
+    this.initialMerchant,
+    this.initialPaymentType,
+    this.initialDate,
+    this.initialNotes,
+    this.initialDirection,
   });
 
   final List<ExpenseCategory> categories;
@@ -49,6 +55,12 @@ class AddTransactionScreen extends StatefulWidget {
   /// instead of just the five generic payment methods.
   final List<String> paymentTypes;
   final String? initialSmsBody;
+  final double? initialAmount;
+  final String? initialMerchant;
+  final String? initialPaymentType;
+  final DateTime? initialDate;
+  final String? initialNotes;
+  final TxnDirection? initialDirection;
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -97,6 +109,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   ExpenseCategory? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
   String _paymentType = 'Cash';
+  late TxnDirection _direction;
   bool _isSplit = false;
   late List<_ManualSplitLine> _splitLines;
   bool _saving = false;
@@ -104,6 +117,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   void initState() {
     super.initState();
+    _direction = widget.initialDirection ?? TxnDirection.debit;
     _allCategories = List<ExpenseCategory>.of(widget.categories);
     _allMerchants = List<String>.of(widget.merchants);
 
@@ -117,6 +131,30 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _ManualSplitLine(category: _selectedCategory),
       _ManualSplitLine(),
     ];
+
+    if (widget.initialAmount != null) {
+      _amountController.text = widget.initialAmount!.toStringAsFixed(2);
+    }
+    if (widget.initialMerchant != null && widget.initialMerchant!.isNotEmpty) {
+      _selectedMerchant = widget.initialMerchant;
+      _lookupMerchantDefault(widget.initialMerchant!);
+    }
+    if (widget.initialPaymentType != null &&
+        widget.initialPaymentType!.isNotEmpty) {
+      final instrument = widget.initialPaymentType!;
+      if (!_addedPaymentTypes.contains(instrument) &&
+          !_basePaymentTypes.contains(instrument) &&
+          !widget.paymentTypes.contains(instrument)) {
+        _addedPaymentTypes.add(instrument);
+      }
+      _paymentType = instrument;
+    }
+    if (widget.initialDate != null) {
+      _selectedDate = widget.initialDate!;
+    }
+    if (widget.initialNotes != null && widget.initialNotes!.isNotEmpty) {
+      _notesController.text = widget.initialNotes!;
+    }
 
     // From the unadded-SMS inbox: the message failed a full parse, but the
     // amount and payment method alone are often still readable. Left blank, as
@@ -373,7 +411,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         date: _selectedDate,
         categoryId: _isSplit ? _splitLines.first.category!.id : _selectedCategory!.id,
         paymentType: _paymentType,
-        direction: TxnDirection.debit,
+        direction: _direction,
         note: _notesController.text.trim(),
         splits: splits,
       );
@@ -472,6 +510,29 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: <Widget>[
+            // Direction Selector: Expense vs Income / Refund
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: SegmentedButton<TxnDirection>(
+                segments: const <ButtonSegment<TxnDirection>>[
+                  ButtonSegment<TxnDirection>(
+                    value: TxnDirection.debit,
+                    label: Text('Expense'),
+                    icon: Icon(Icons.arrow_upward, size: 16),
+                  ),
+                  ButtonSegment<TxnDirection>(
+                    value: TxnDirection.credit,
+                    label: Text('Income / Refund'),
+                    icon: Icon(Icons.arrow_downward, size: 16),
+                  ),
+                ],
+                selected: <TxnDirection>{_direction},
+                onSelectionChanged: (Set<TxnDirection> newSelection) {
+                  setState(() => _direction = newSelection.first);
+                },
+              ),
+            ),
+
             // 1. AMOUNT FIELD
             Card(
               elevation: 0,
