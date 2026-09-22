@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -175,8 +176,8 @@ class UpdatePrefs {
 
   Future<bool> autoCheckEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    // Absent means a fresh install, where the feature ships switched on.
-    return prefs.getBool(_autoCheckKey) ?? true;
+    // Default to false. Automatic update checks are opt-in.
+    return prefs.getBool(_autoCheckKey) ?? false;
   }
 
   Future<void> setAutoCheckEnabled(bool value) async {
@@ -193,6 +194,31 @@ class UpdatePrefs {
   Future<void> setLastChecked(DateTime value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_lastCheckedKey, value.millisecondsSinceEpoch);
+  }
+}
+
+/// Checks whether the installer store matches any known F-Droid or open-source app stores.
+bool isFdroidStore(String? store) {
+  if (store == null || store.isEmpty) return false;
+  final s = store.toLowerCase();
+  return s.contains('fdroid') ||
+      s.contains('droidify') ||
+      s.contains('neostore') ||
+      s.contains('machiav3lli') ||
+      s.contains('aurora') ||
+      s.contains('obtainium');
+}
+
+/// Checks whether an F-Droid client is installed by querying Android intents
+/// (such as `fdroidrepo://` or `fdroidapp://`) and known package identifiers.
+Future<bool> isFdroidClientInstalled() async {
+  if (!Platform.isAndroid) return false;
+  try {
+    const channel = MethodChannel('com.tu.expense.manager/telephony');
+    final result = await channel.invokeMethod<bool>('isFdroidInstalled');
+    return result ?? false;
+  } catch (_) {
+    return false;
   }
 }
 
@@ -221,10 +247,13 @@ class UpdateService {
       return UpdateCheck.upToDate(current);
     }
 
+    if (await isFdroidClientInstalled()) {
+      return UpdateCheck.upToDate(current);
+    }
+
     try {
       final info = await PackageInfo.fromPlatform();
-      final store = info.installerStore?.toLowerCase() ?? '';
-      if (store.contains('fdroid') || store.contains('droidify')) {
+      if (isFdroidStore(info.installerStore)) {
         return UpdateCheck.upToDate(current);
       }
     } catch (_) {
@@ -270,12 +299,12 @@ class UpdateService {
   /// offline, or already current all come back null and say nothing.
   Future<AppRelease?> checkOnLaunch() async {
     if (const bool.fromEnvironment('FDROID_BUILD', defaultValue: false)) return null;
+    if (!await UpdatePrefs.instance.autoCheckEnabled()) return null;
+    if (await isFdroidClientInstalled()) return null;
     try {
       final info = await PackageInfo.fromPlatform();
-      final store = info.installerStore?.toLowerCase() ?? '';
-      if (store.contains('fdroid') || store.contains('droidify')) return null;
+      if (isFdroidStore(info.installerStore)) return null;
     } catch (_) {}
-    if (!await UpdatePrefs.instance.autoCheckEnabled()) return null;
     final due = isCheckDue(
       lastChecked: await UpdatePrefs.instance.lastChecked(),
       now: DateTime.now(),
