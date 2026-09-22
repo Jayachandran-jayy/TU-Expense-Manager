@@ -222,6 +222,16 @@ class UpdateService {
     }
 
     try {
+      final info = await PackageInfo.fromPlatform();
+      final store = info.installerStore?.toLowerCase() ?? '';
+      if (store.contains('fdroid') || store.contains('droidify')) {
+        return UpdateCheck.upToDate(current);
+      }
+    } catch (_) {
+      // Ignored: fallback to regular check if installer info fails to resolve.
+    }
+
+    try {
       final response = await _client.get(
         Uri.https('api.github.com', '/repos/$kUpdateRepo/releases/latest'),
         headers: const <String, String>{
@@ -260,6 +270,11 @@ class UpdateService {
   /// offline, or already current all come back null and say nothing.
   Future<AppRelease?> checkOnLaunch() async {
     if (const bool.fromEnvironment('FDROID_BUILD', defaultValue: false)) return null;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final store = info.installerStore?.toLowerCase() ?? '';
+      if (store.contains('fdroid') || store.contains('droidify')) return null;
+    } catch (_) {}
     if (!await UpdatePrefs.instance.autoCheckEnabled()) return null;
     final due = isCheckDue(
       lastChecked: await UpdatePrefs.instance.lastChecked(),
