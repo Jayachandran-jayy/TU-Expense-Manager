@@ -508,6 +508,25 @@ void main() {
     });
   });
 
+  group('isFdroidStore', () {
+    test('recognizes F-Droid and open-source clients', () {
+      expect(isFdroidStore('org.fdroid.fdroid'), isTrue);
+      expect(isFdroidStore('org.fdroid.fdroid.privileged'), isTrue);
+      expect(isFdroidStore('org.fdroid.basic'), isTrue);
+      expect(isFdroidStore('com.looker.droidify'), isTrue);
+      expect(isFdroidStore('com.machiav3lli.fdroid'), isTrue);
+      expect(isFdroidStore('com.aurora.adroid'), isTrue);
+      expect(isFdroidStore('repo.faked.obtainium'), isTrue);
+    });
+
+    test('ignores null, empty or other stores', () {
+      expect(isFdroidStore(null), isFalse);
+      expect(isFdroidStore(''), isFalse);
+      expect(isFdroidStore('com.android.vending'), isFalse);
+      expect(isFdroidStore('com.amazon.venezia'), isFalse);
+    });
+  });
+
   group('YearMonth', () {
     // These two are first for a reason. If == or hashCode is wrong, the month
     // filter's `contains` misses every time and the ledger renders empty with
