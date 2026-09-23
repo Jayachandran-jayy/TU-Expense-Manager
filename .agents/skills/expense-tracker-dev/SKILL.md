@@ -57,6 +57,16 @@ This skill covers the project structure, design invariants, database schema, SMS
 >    - Provide a clear template with the title, summary of changes, and technical notes for reviewers.
 >    - If updating an existing PR via GitHub CLI (`gh pr edit`), automatically apply the generated description.
 >    - Never leave the user without a comprehensive description to copy-paste or submit when code is pushed to a branch.
+>
+> 6. **Mandatory F-Droid In-Flight MR Maintenance Protocol (Until MR !48556 is Merged)**:
+>    F-Droid inclusion MR [!48556](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48556) is currently pending review/testing in F-Droid's queue.
+>    Maintainer instruction: *"This MR is mostly ready. We'll test it later. If everything works well we'll merge it. Meantime if you release a new version please update this MR."*
+>    - **CRITICAL**: Whenever a new app version is released upstream while MR !48556 is still open, **YOU MUST IMMEDIATELY UPDATE `fdroiddata` (`metadata/com.tu.expense.manager.yml`) AND PUSH TO MR !48556**.
+>    - Ensure split APK version codes (`<buildNumber>1`, `<buildNumber>2`, `<buildNumber>3`) are added.
+>    - Ensure `autoCheckEnabled()` remains `false` by default.
+>    - Ensure runtime F-Droid intent (`fdroidrepo://`, `fdroidapp://`) and package/store detection continues to suppress update checks and displays *"Updates managed externally"*.
+>    - Ensure Fastlane metadata descriptions use HTML (never Markdown).
+>    - Verify reproducible build via Docker (`fdroid build --stop --flavor split com.tu.expense.manager:<versionCode>`) before pushing to GitLab `master`.
 
 ---
 
@@ -310,3 +320,33 @@ Whenever a UI redesign, new feature, theme update, or installation step changes,
 
 ### Multi-Month Comparison
 The app features a full-screen `CompareMonthsScreen` that displays a side-by-side table of category spending across 2 to 6 selected months, along with delta columns (Δ amount and Δ %) for direct 2-month comparisons. The screen handles data from `spendByCategoryPerMonth`.
+
+---
+
+## 11. 📦 F-Droid Release & In-Flight MR Lifecycle Protocol
+
+F-Droid inclusion Merge Request [!48556](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48556) is actively pending in F-Droid's review queue.
+
+> [!IMPORTANT]
+> **Maintainer Directive (linsui)**:
+> *"This MR is mostly ready. We'll test it later. If everything works well we'll merge it. Meantime if you release a new version please update this MR."*
+>
+> Until MR !48556 is merged into `fdroid/fdroiddata:master`, every upstream release (`vX.Y.Z`) MUST be synced to `metadata/com.tu.expense.manager.yml` in `/Users/jay/Documents/projects/fdroiddata`.
+
+### Upstream Release Checklist & F-Droid Invariants
+1. **Split APK Version Codes**:
+   - `pubspec.yaml` specifies `version: X.Y.Z+<buildNumber>`.
+   - Resulting split APK codes are `<buildNumber>1` (`x86_64`), `<buildNumber>2` (`armeabi-v7a`), `<buildNumber>3` (`arm64-v8a`).
+2. **In-App Updater Safeguards**:
+   - `UpdatePrefs.autoCheckEnabled()` must default to `false`.
+   - `MainActivity.kt` and `update_service.dart` must detect F-Droid intents (`fdroidrepo://`, `fdroidapp://`) and client packages, suppressing update checks when present.
+3. **Reproducible Builds**:
+   - Release workflow pins Flutter in `.github/workflows/release.yml`.
+   - Commit hash in `metadata/com.tu.expense.manager.yml` must be the full 40-character SHA of the release commit on `main`.
+   - Test reproducible build with Docker:
+     ```bash
+     docker run --rm -v /Users/jay/Documents/projects/fdroiddata:/repo -w /repo registry.gitlab.com/fdroid/docker-executable:latest fdroid build --stop --flavor split com.tu.expense.manager:<versionCode>
+     ```
+4. **GitLab Sync**:
+   - Commit and push to `master` branch in `/Users/jay/Documents/projects/fdroiddata` to update MR !48556.
+   - Verify GitLab CI pipeline passes 100%.
