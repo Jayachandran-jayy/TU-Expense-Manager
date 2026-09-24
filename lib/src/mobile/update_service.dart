@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -212,7 +213,7 @@ bool isFdroidStore(String? store) {
 /// Checks whether an F-Droid client is installed by querying Android intents
 /// (such as `fdroidrepo://` or `fdroidapp://`) and known package identifiers.
 Future<bool> isFdroidClientInstalled() async {
-  if (!Platform.isAndroid) return false;
+  if (kIsWeb || !Platform.isAndroid) return false;
   try {
     const channel = MethodChannel('com.tu.expense.manager/telephony');
     final result = await channel.invokeMethod<bool>('isFdroidInstalled');
