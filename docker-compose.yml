@@ -22,12 +22,12 @@ services:
     # which reads like a wrong image name rather than a permissions problem. Once,
     # after the first tag:
     #
-    #   github.com/unstopablejay?tab=packages -> tu-expense-server
+    #   github.com/Jayachandran-jayy?tab=packages -> tu-expense-server
     #     -> Package settings -> Change visibility -> Public
     #
     # Or keep it private and authenticate on the box instead:
-    #   docker login ghcr.io -u unstopablejay -p <a PAT with read:packages>
-    image: ghcr.io/unstopablejay/tu-expense-server:latest
+    #   docker login ghcr.io -u jayachandran-jayy -p <a PAT with read:packages>
+    image: ghcr.io/jayachandran-jayy/tu-expense-server:latest
     container_name: tu-expense-server
     restart: unless-stopped
 
@@ -85,7 +85,7 @@ x-casaos:
     - amd64
     - arm64
   main: server
-  author: unstopablejay
+  author: Jayachandran-jayy
   category: Finance
   description:
     en_us: >-
@@ -95,8 +95,8 @@ x-casaos:
       ledger, so a phone and an emulator never overwrite each other.
   tagline:
     en_us: Your expense ledger, on your own hardware
-  developer: unstopablejay
-  icon: https://raw.githubusercontent.com/unstopablejay/TU-Expense-Manager/main/assets/icon/app_icon.png
+  developer: Jayachandran-jayy
+  icon: https://raw.githubusercontent.com/Jayachandran-jayy/TU-Expense-Manager/main/assets/icon/app_icon.png
   title:
     en_us: TU Expense Tracker
   index: /

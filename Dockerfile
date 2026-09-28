@@ -120,7 +120,7 @@ FROM debian:bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="TU Expense Tracker server"
 LABEL org.opencontainers.image.description="Self-hosted snapshot store and web UI for TU Expense Tracker"
-LABEL org.opencontainers.image.source="https://github.com/unstopablejay/TU-Expense-Manager"
+LABEL org.opencontainers.image.source="https://github.com/Jayachandran-jayy/TU-Expense-Manager"
 LABEL org.opencontainers.image.licenses="NOASSERTION"
 
 # No ca-certificates on purpose: this server makes no outbound requests except a
