@@ -128,7 +128,7 @@ jobs:
           password: ${{ github.token }}
 
       # Lower-cased because a GHCR repository name must be, and a GitHub username
-      # need not be — `unstopablejay` is fine but the rule bites anyone whose is
+      # need not be — `jayachandran-jayy` is fine but the rule bites anyone whose is
       # not, and a 403 from a case mismatch is an unhelpful way to find out.
       - name: Work out the image name and tags
         id: meta
