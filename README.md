@@ -144,7 +144,7 @@ Follow these simple steps to install the app on your Android phone:
 ---
 
 ### Step 1: Download the App
-1. Go to the [Releases](https://github.com/unstopablejay/TU-Expense-Manager/releases) page.
+1. Go to the [Releases](https://github.com/Jayachandran-jayy/TU-Expense-Manager/releases) page.
 2. Tap on the latest file ending in **`.apk`** (for example: `tu-expense-tracker.apk`) to start downloading.
 3. If your web browser shows a message saying *"File might be harmful"*, tap **Download anyway**.
 
@@ -1248,12 +1248,12 @@ git tag v1.2.0 && git push origin v1.2.0
 
 That builds the signed APK and attaches it to a GitHub Release, and separately
 builds the `linux/amd64` image and pushes it to
-`ghcr.io/unstopablejay/tu-expense-server:1.2.0` and `:latest`.
+`ghcr.io/jayachandran-jayy/tu-expense-server:1.2.0` and `:latest`.
 
 **One thing to do once, after the first tag.** A new GHCR package is private even
 when the repository is public, so ZimaOS pulling it gets `denied` — which reads
 like a wrong image name rather than a permissions problem. Make it public at
-*github.com/unstopablejay?tab=packages → tu-expense-server → Package settings →
+*github.com/Jayachandran-jayy?tab=packages → tu-expense-server → Package settings →
 Change visibility*, or keep it private and run
 `docker login ghcr.io` on the box with a token that has `read:packages`.
 

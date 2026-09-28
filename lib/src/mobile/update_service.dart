@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -23,7 +24,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// The repository releases are published to. `release.yml` tags a commit,
 /// builds the APK and attaches it to a GitHub Release, so `releases/latest` is
 /// the only thing the app ever has to ask about.
-const String kUpdateRepo = 'unstopablejay/TU-Expense-Manager';
+const String kUpdateRepo = 'Jayachandran-jayy/TU-Expense-Manager';
 
 /// How long an automatic check waits before looking again.
 const Duration kUpdateCheckInterval = Duration(days: 7);
@@ -212,7 +213,7 @@ bool isFdroidStore(String? store) {
 /// Checks whether an F-Droid client is installed by querying Android intents
 /// (such as `fdroidrepo://` or `fdroidapp://`) and known package identifiers.
 Future<bool> isFdroidClientInstalled() async {
-  if (!Platform.isAndroid) return false;
+  if (kIsWeb || !Platform.isAndroid) return false;
   try {
     const channel = MethodChannel('com.tu.expense.manager/telephony');
     final result = await channel.invokeMethod<bool>('isFdroidInstalled');
