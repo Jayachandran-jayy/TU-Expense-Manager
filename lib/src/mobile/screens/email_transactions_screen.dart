@@ -325,14 +325,27 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
   }
 
   Future<void> _openVerification(String emailContent, [EmailMessageItem? item]) async {
-    final parsed = EmailParser.parse(emailContent) ??
+    final fallbackDate = item?.date ?? DateTime.now();
+    final parsed = item?.parsed ??
+        EmailParser.parse(emailContent, fallbackDate: fallbackDate) ??
         ParsedEmail(
           amount: EmailParser.extractAmountOnly(emailContent) ?? 0.0,
           paymentType: EmailParser.extractInstrumentOnly(emailContent) ?? 'Credit Card',
           merchant: EmailParser.extractMerchantOnly(emailContent) ?? '',
-          date: EmailParser.extractDateOnly(emailContent)?.date ?? DateTime.now(),
+          date: EmailParser.extractDateOnly(emailContent, fallbackDate: fallbackDate)?.date ?? fallbackDate,
           direction: TxnDirection.debit,
         );
+
+    final txnDate = (parsed.hasExplicitTime || item == null)
+        ? parsed.date
+        : DateTime(
+            parsed.date.year,
+            parsed.date.month,
+            parsed.date.day,
+            item.date.hour,
+            item.date.minute,
+            item.date.second,
+          );
 
     final bool? added = await Navigator.push<bool>(
       context,
@@ -344,7 +357,7 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
           initialAmount: parsed.amount > 0 ? parsed.amount : null,
           initialMerchant: parsed.merchant.isNotEmpty ? parsed.merchant : null,
           initialPaymentType: parsed.paymentType.isNotEmpty ? parsed.paymentType : null,
-          initialDate: parsed.date,
+          initialDate: txnDate,
           initialNotes: parsed.reference.isNotEmpty ? 'Ref: ${parsed.reference}' : null,
           initialDirection: parsed.direction,
         ),

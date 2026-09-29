@@ -30,6 +30,7 @@ void main() {
     List<String> merchs = merchants,
     List<String> paymentTypes = const <String>[],
     String? initialSmsBody,
+    DateTime? initialDate,
   }) {
     return MaterialApp(
       home: AddTransactionScreen(
@@ -37,6 +38,7 @@ void main() {
         merchants: merchs,
         paymentTypes: paymentTypes,
         initialSmsBody: initialSmsBody,
+        initialDate: initialDate,
       ),
     );
   }
@@ -237,6 +239,53 @@ void main() {
       final acctChip = find.widgetWithText(ChoiceChip, 'HDFC Bank A/c XX0444');
       expect(acctChip, findsOneWidget);
       expect(tester.widget<ChoiceChip>(acctChip).selected, isTrue);
+    });
+
+    testWidgets('pre-fills merchant, amount, payment method, and exact clock time from SMS body',
+        (tester) async {
+      setLargeViewport(tester);
+
+      await tester.pumpWidget(buildScreen(
+        initialSmsBody: 'Spent Rs.122.02 From HDFC Bank Card 6824 At INNOVATIVE RETAIL CONC On 2026-08-13 07:19:26',
+      ));
+      await tester.pumpAndSettle();
+
+      final amountField =
+          tester.widget<TextFormField>(find.byType(TextFormField).first);
+      expect(amountField.controller?.text, '122.02');
+      expect(find.text('INNOVATIVE RETAIL CONC'), findsOneWidget);
+      expect(find.text('7:19 AM'), findsOneWidget);
+      expect(find.text('12:00 AM'), findsNothing);
+    });
+
+    testWidgets('borrows arrival time when SMS body has only date and initialDate is provided',
+        (tester) async {
+      setLargeViewport(tester);
+
+      final arrival = DateTime(2026, 8, 13, 14, 35, 10);
+      await tester.pumpWidget(buildScreen(
+        initialSmsBody: 'Sent Rs.500 to Swiggy on 13-08-2026',
+        initialDate: arrival,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('500.00'), findsOneWidget);
+      expect(find.text('2:35 PM'), findsOneWidget);
+      expect(find.text('12:00 AM'), findsNothing);
+    });
+
+    testWidgets('preserves initialDate exact clock time when passed directly (e.g. from email)',
+        (tester) async {
+      setLargeViewport(tester);
+
+      final emailTime = DateTime(2026, 9, 21, 11, 20, 0);
+      await tester.pumpWidget(buildScreen(
+        initialDate: emailTime,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('11:20 AM'), findsOneWidget);
+      expect(find.text('12:00 AM'), findsNothing);
     });
   });
 

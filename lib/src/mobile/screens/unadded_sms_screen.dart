@@ -80,6 +80,7 @@ class _UnaddedSmsScreenState extends State<UnaddedSmsScreen> {
           merchants: widget.merchants,
           paymentTypes: widget.paymentTypes,
           initialSmsBody: msg.body,
+          initialDate: msg.receivedAt,
         ),
       ),
     );

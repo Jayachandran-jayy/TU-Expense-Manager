@@ -488,7 +488,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   /// Feeds an arbitrary SMS body through parse -> auto-categorize -> insert.
   Future<void> _ingest(String body) async {
-    final parsed = SmsParser.parse(body);
+    final parsed = SmsParser.parse(body, receivedAt: DateTime.now());
     if (parsed == null) {
       _toast('Could not parse that SMS — no template matched.');
       return;

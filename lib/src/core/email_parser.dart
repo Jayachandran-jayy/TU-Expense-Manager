@@ -146,6 +146,10 @@ class EmailParser {
   // ISSUER TEMPLATES
   // ---------------------------------------------------------------------------
 
+  /// Robust date/time capture matching standard Indian banking alerts across all issuers.
+  static const String _dateCapture =
+      r'((?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}|\d{1,2}[- /.][A-Za-z]{3,9}[- /.](?:\d{4}|\d{2})|[A-Za-z]{3,9}\s+\d{1,2},?\s+(?:\d{4}|\d{2}))(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?)?)';
+
   /// HDFC Bank credit/debit card alerts
   static ParsedEmail? _parseHdfc(String text, DateTime? fallbackDate) {
     if (!RegExp(r'hdfc\s*bank', caseSensitive: false).hasMatch(text)) {
@@ -154,7 +158,8 @@ class EmailParser {
 
     // Pattern 1: Thank you for using your HDFC Bank Credit Card ending in 1234 for INR 1,500.00 at AMAZON on 22-09-2026 14:30:15
     final p1 = RegExp(
-      r'using your HDFC Bank (?:Credit|Debit) Card ending (?:in\s+)?(\d{4}) for (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) at (.+?) on (\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?)?)',
+      r'using your HDFC Bank (?:Credit|Debit) Card ending (?:in\s+)?(\d{4}) for (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) at (.+?) on ' +
+          _dateCapture,
       caseSensitive: false,
     ).firstMatch(text);
     if (p1 != null) {
@@ -179,7 +184,8 @@ class EmailParser {
 
     // Pattern 2: INR 450.00 has been debited from your HDFC Bank A/c / Card ending 9012 towards SWIGGY on 21-09-2026
     final p2 = RegExp(
-      r'(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)\s+(?:has been |is )?debited from (?:your )?HDFC Bank (?:A\/c|Card) ending (?:in\s+)?(\d{4})\s+(?:at|to|towards)\s+(.+?)\s+on\s+(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?)?)',
+      r'(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)\s+(?:has been |is )?debited from (?:your )?HDFC Bank (?:A\/c|Card) ending (?:in\s+)?(\d{4})\s+(?:at|to|towards)\s+(.+?)\s+on\s+' +
+          _dateCapture,
       caseSensitive: false,
     ).firstMatch(text);
     if (p2 != null) {
@@ -203,7 +209,8 @@ class EmailParser {
 
     // Pattern 3: Alert: You have spent Rs. 849.00 on your HDFC Bank Card ending 5678 at ZOMATO on 20-09-2026
     final p3 = RegExp(
-      r'spent (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) on (?:your )?HDFC Bank (?:Credit )?Card ending (?:in\s+)?(\d{4}) at (.+?) on (\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?)?)',
+      r'spent (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) on (?:your )?HDFC Bank (?:Credit )?Card ending (?:in\s+)?(\d{4}) at (.+?) on ' +
+          _dateCapture,
       caseSensitive: false,
     ).firstMatch(text);
     if (p3 != null) {
@@ -261,7 +268,9 @@ class EmailParser {
 
     // Pattern 2: ICICI Bank Card ending 1004 was used for a purchase of Rs. 1,200.00 on 22-09-2026 at RELIANCE
     final p2 = RegExp(
-      r'ICICI Bank (?:Credit|Debit)?\s*Card ending (?:in\s+)?(\d{4}) (?:was used for a purchase of|was used for)\s+(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)\s+on\s+(.+?)\s+at\s+([A-Za-z0-9\s._&/-]+)',
+      r'ICICI Bank (?:Credit|Debit)?\s*Card ending (?:in\s+)?(\d{4}) (?:was used for a purchase of|was used for)\s+(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)\s+on\s+' +
+          _dateCapture +
+          r'\s+at\s+([A-Za-z0-9\s._&/-]+)',
       caseSensitive: false,
     ).firstMatch(text);
     if (p2 != null) {
@@ -295,7 +304,8 @@ class EmailParser {
 
     // Pattern 1: Thank you for using your SBI Credit Card ending 4321 for Rs. 1,299.00 at MYNTRA on 22/09/2026
     final p1 = RegExp(
-      r'using your SBI (?:Credit )?Card ending (?:in\s+)?(\d{4}) for (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) at (.+?) on (\d{1,2}[-/]\d{1,2}[-/]\d{2,4})',
+      r'using your SBI (?:Credit )?Card ending (?:in\s+)?(\d{4}) for (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) at (.+?) on ' +
+          _dateCapture,
       caseSensitive: false,
     ).firstMatch(text);
     if (p1 != null) {
@@ -319,7 +329,9 @@ class EmailParser {
 
     // Pattern 2: Your SBI Card ending 4321 was used to make a purchase of Rs. 450.00 on 21/09/2026 at RELIANCE RETAIL
     final p2 = RegExp(
-      r'SBI Card ending (?:in\s+)?(\d{4}) was used (?:to make a purchase of|for)\s+(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)\s+on\s+(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\s+at\s+(.+?)(?:\.|\s+Ref|$)',
+      r'SBI Card ending (?:in\s+)?(\d{4}) was used (?:to make a purchase of|for)\s+(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)\s+on\s+' +
+          _dateCapture +
+          r'\s+at\s+(.+?)(?:\.|\s+Ref|$)',
       caseSensitive: false,
     ).firstMatch(text);
     if (p2 != null) {
@@ -352,7 +364,9 @@ class EmailParser {
 
     // Pattern 1: Your Axis Bank Card no. XX3456 was used for INR 850.00 on 22-09-2026 18:30:00 at STARBUCKS.
     final p1 = RegExp(
-      r'Axis Bank Card (?:no\.?\s*)?(?:XX)?(\d{4}) was used for (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) on (\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)\s+at\s+(.+?)(?:\.|\s+Available|\s+Avl|$)',
+      r'Axis Bank Card (?:no\.?\s*)?(?:XX)?(\d{4}) was used for (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) on ' +
+          _dateCapture +
+          r'\s+at\s+(.+?)(?:\.|\s+Available|\s+Avl|$)',
       caseSensitive: false,
     ).firstMatch(text);
     if (p1 != null) {
@@ -385,7 +399,8 @@ class EmailParser {
 
     // Pattern 1: INR 204.00 spent on YES BANK Card X2858 at UPI_GEORGE EGG CENTRE 13-08-2026 09:21:35 am
     final p1 = RegExp(
-      r'(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) spent on YES BANK (?:Credit )?Card (?:ending |X)?(\d{4}) (?:at|@)\s*(.+?)\s+(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?)?)',
+      r'(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) spent on YES BANK (?:Credit )?Card (?:ending |X)?(\d{4}) (?:at|@)\s*(.+?)\s+' +
+          _dateCapture,
       caseSensitive: false,
     ).firstMatch(text);
     if (p1 != null) {
@@ -417,7 +432,9 @@ class EmailParser {
     }
 
     final p1 = RegExp(
-      r'(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) (?:was spent|spent) on your Kotak (?:Credit|Debit) Card ending (?:in\s+)?(\d{4}) on (\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)\s+at\s+(.+?)(?:\.|\s+Avl|$)',
+      r'(?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) (?:was spent|spent) on your Kotak (?:Credit|Debit) Card ending (?:in\s+)?(\d{4}) on ' +
+          _dateCapture +
+          r'\s+at\s+(.+?)(?:\.|\s+Avl|$)',
       caseSensitive: false,
     ).firstMatch(text);
     if (p1 != null) {
@@ -449,7 +466,8 @@ class EmailParser {
     }
 
     final p1 = RegExp(
-      r'using your IndusInd Bank (?:Credit|Debit) Card ending (?:in\s+)?(\d{4}) for (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) at (.+?) on (\d{1,2}[-/]\d{1,2}[-/]\d{2,4})',
+      r'using your IndusInd Bank (?:Credit|Debit) Card ending (?:in\s+)?(\d{4}) for (?:INR|Rs\.?|₹)\s*([\d,]+(?:\.\d{1,2})?) at (.+?) on ' +
+          _dateCapture,
       caseSensitive: false,
     ).firstMatch(text);
     if (p1 != null) {
@@ -599,22 +617,44 @@ class EmailParser {
   static DateStamp? extractDateOnly(String text, {DateTime? fallbackDate}) {
     final clean = stripHtml(text);
 
-    // e.g. 22-09-2026 or 22/09/2026 or 22-Sep-2026 with optional time
+    // 0. ISO format YYYY-MM-DD
+    final isoMatch = RegExp(
+      r'(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[\sT:]+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?)?)',
+      caseSensitive: false,
+    ).firstMatch(clean);
+    if (isoMatch != null) {
+      final s = _parseDate(isoMatch.group(1)!, fallbackDate);
+      if (s != null) return s;
+    }
+
+    // 1. e.g. 22-09-2026 or 22/09/2026 or 22.09.2026 with optional time
     final dateMatch = RegExp(
-      r'(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?)?)',
+      r'(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?)?)',
       caseSensitive: false,
     ).firstMatch(clean);
     if (dateMatch != null) {
-      return _parseDate(dateMatch.group(1)!, fallbackDate);
+      final s = _parseDate(dateMatch.group(1)!, fallbackDate);
+      if (s != null) return s;
     }
 
-    // e.g. Sep 21, 2026 or 21-Sep-2026
+    // 2. e.g. 21-Sep-2026 or 21 Sep 2026 with optional time
+    final dmyMatch = RegExp(
+      r'(\d{1,2}[- /.](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[- /.]\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?)?)',
+      caseSensitive: false,
+    ).firstMatch(clean);
+    if (dmyMatch != null) {
+      final s = _parseDate(dmyMatch.group(1)!, fallbackDate);
+      if (s != null) return s;
+    }
+
+    // 3. e.g. Sep 21, 2026
     final namedMatch = RegExp(
-      r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{2,4}(?:\s+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?)?)',
+      r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?)?)',
       caseSensitive: false,
     ).firstMatch(clean);
     if (namedMatch != null) {
-      return _parseDate(namedMatch.group(1)!, fallbackDate);
+      final s = _parseDate(namedMatch.group(1)!, fallbackDate);
+      if (s != null) return s;
     }
 
     return null;
@@ -654,9 +694,39 @@ class EmailParser {
   static DateStamp? _parseDate(String raw, DateTime? fallback) {
     final trimmed = raw.trim();
 
+    // 0. ISO format YYYY-MM-DD
+    final iso = RegExp(
+      r'^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[\sT:]+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?)?',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
+    if (iso != null) {
+      final year = int.parse(iso.group(1)!);
+      final month = int.parse(iso.group(2)!);
+      final day = int.parse(iso.group(3)!);
+      final hasTime = iso.group(4) != null;
+      var hour = hasTime ? int.parse(iso.group(4)!) : (fallback?.hour ?? 0);
+      final minute =
+          hasTime ? int.parse(iso.group(5)!) : (fallback?.minute ?? 0);
+      final second = (hasTime && iso.group(6) != null)
+          ? int.parse(iso.group(6)!)
+          : (hasTime ? 0 : (fallback?.second ?? 0));
+      final meridiem = iso.group(7)?.toLowerCase();
+      if (meridiem == 'pm' && hour != 12) hour += 12;
+      if (meridiem == 'am' && hour == 12) hour = 0;
+      return _buildStamp(
+        year: year,
+        month: month,
+        day: day,
+        hour: hour,
+        minute: minute,
+        second: second,
+        hasTime: hasTime,
+      );
+    }
+
     // 1. DD-MM-YYYY or DD/MM/YYYY with optional time
     final numeric = RegExp(
-      r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([ap]m))?)?',
+      r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?)?',
       caseSensitive: false,
     ).firstMatch(trimmed);
     if (numeric != null) {
@@ -666,19 +736,30 @@ class EmailParser {
       if (year < 100) year += 2000;
 
       final hasTime = numeric.group(4) != null;
-      var hour = hasTime ? int.parse(numeric.group(4)!) : 0;
-      final minute = hasTime ? int.parse(numeric.group(5)!) : 0;
-      final second = (hasTime && numeric.group(6) != null) ? int.parse(numeric.group(6)!) : 0;
+      var hour = hasTime ? int.parse(numeric.group(4)!) : (fallback?.hour ?? 0);
+      final minute =
+          hasTime ? int.parse(numeric.group(5)!) : (fallback?.minute ?? 0);
+      final second = (hasTime && numeric.group(6) != null)
+          ? int.parse(numeric.group(6)!)
+          : (hasTime ? 0 : (fallback?.second ?? 0));
       final meridiem = numeric.group(7)?.toLowerCase();
       if (meridiem == 'pm' && hour != 12) hour += 12;
       if (meridiem == 'am' && hour == 12) hour = 0;
 
-      return _buildStamp(year: year, month: month, day: day, hour: hour, minute: minute, second: second, hasTime: hasTime);
+      return _buildStamp(
+        year: year,
+        month: month,
+        day: day,
+        hour: hour,
+        minute: minute,
+        second: second,
+        hasTime: hasTime,
+      );
     }
 
-    // 2. DD-Mon-YYYY (e.g. 21-Sep-2026 or 21-Sep-26)
+    // 2. DD-Mon-YYYY (e.g. 21-Sep-2026 or 21-Sep-26 or 21 Sep 2026)
     final dmyNamed = RegExp(
-      r'^(\d{1,2})[- ]([A-Za-z]{3,9})[- ](\d{2,4})(?:\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([ap]m))?)?',
+      r'^(\d{1,2})[- /.]([A-Za-z]{3,9})[- /.](\d{2,4})(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?)?',
       caseSensitive: false,
     ).firstMatch(trimmed);
     if (dmyNamed != null) {
@@ -690,19 +771,30 @@ class EmailParser {
       if (year < 100) year += 2000;
 
       final hasTime = dmyNamed.group(4) != null;
-      var hour = hasTime ? int.parse(dmyNamed.group(4)!) : 0;
-      final minute = hasTime ? int.parse(dmyNamed.group(5)!) : 0;
-      final second = (hasTime && dmyNamed.group(6) != null) ? int.parse(dmyNamed.group(6)!) : 0;
+      var hour = hasTime ? int.parse(dmyNamed.group(4)!) : (fallback?.hour ?? 0);
+      final minute =
+          hasTime ? int.parse(dmyNamed.group(5)!) : (fallback?.minute ?? 0);
+      final second = (hasTime && dmyNamed.group(6) != null)
+          ? int.parse(dmyNamed.group(6)!)
+          : (hasTime ? 0 : (fallback?.second ?? 0));
       final meridiem = dmyNamed.group(7)?.toLowerCase();
       if (meridiem == 'pm' && hour != 12) hour += 12;
       if (meridiem == 'am' && hour == 12) hour = 0;
 
-      return _buildStamp(year: year, month: month, day: day, hour: hour, minute: minute, second: second, hasTime: hasTime);
+      return _buildStamp(
+        year: year,
+        month: month,
+        day: day,
+        hour: hour,
+        minute: minute,
+        second: second,
+        hasTime: hasTime,
+      );
     }
 
     // 3. Mon DD, YYYY (e.g. Sep 21, 2026 at 11:20:00)
     final mdyNamed = RegExp(
-      r'^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})(?:\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([ap]m))?)?',
+      r'^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?)?',
       caseSensitive: false,
     ).firstMatch(trimmed);
     if (mdyNamed != null) {
@@ -714,14 +806,25 @@ class EmailParser {
       if (year < 100) year += 2000;
 
       final hasTime = mdyNamed.group(4) != null;
-      var hour = hasTime ? int.parse(mdyNamed.group(4)!) : 0;
-      final minute = hasTime ? int.parse(mdyNamed.group(5)!) : 0;
-      final second = (hasTime && mdyNamed.group(6) != null) ? int.parse(mdyNamed.group(6)!) : 0;
+      var hour = hasTime ? int.parse(mdyNamed.group(4)!) : (fallback?.hour ?? 0);
+      final minute =
+          hasTime ? int.parse(mdyNamed.group(5)!) : (fallback?.minute ?? 0);
+      final second = (hasTime && mdyNamed.group(6) != null)
+          ? int.parse(mdyNamed.group(6)!)
+          : (hasTime ? 0 : (fallback?.second ?? 0));
       final meridiem = mdyNamed.group(7)?.toLowerCase();
       if (meridiem == 'pm' && hour != 12) hour += 12;
       if (meridiem == 'am' && hour == 12) hour = 0;
 
-      return _buildStamp(year: year, month: month, day: day, hour: hour, minute: minute, second: second, hasTime: hasTime);
+      return _buildStamp(
+        year: year,
+        month: month,
+        day: day,
+        hour: hour,
+        minute: minute,
+        second: second,
+        hasTime: hasTime,
+      );
     }
 
     return null;
