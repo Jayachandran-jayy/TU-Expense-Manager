@@ -208,6 +208,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     });
   }
 
+  /// Rewrites the last split line to the remaining balance. Called after any edit
+  /// to a row above it — editing the last row itself is left alone so it can be
+  /// corrected by hand even if that leaves the split unbalanced.
+  void _rebalanceSplits({required int editedIndex}) {
+    if (editedIndex == _splitLines.length - 1 || _totalAmount <= 0) {
+      setState(() {});
+      return;
+    }
+    _autoBalanceSplits();
+  }
+
   Future<void> _pickDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -308,7 +319,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ),
     );
     if (chosen == null || !mounted) return;
-    setState(() => _selectedCategory = chosen);
+    setState(() {
+      _selectedCategory = chosen;
+      if (_splitLines.isNotEmpty && _splitLines.first.amount == 0) {
+        _splitLines.first.category = chosen;
+      }
+    });
   }
 
   Future<void> _pickCategoryForSplitLine(_ManualSplitLine line) async {
@@ -785,6 +801,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             setState(() {
                               _isSplit = val;
                               if (val) {
+                                if (_splitLines.isNotEmpty &&
+                                    _splitLines.first.category == null) {
+                                  _splitLines.first.category = _selectedCategory;
+                                }
                                 _autoBalanceSplits();
                               }
                             });
@@ -1008,7 +1028,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 border: OutlineInputBorder(),
                 contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               ),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) => _rebalanceSplits(editedIndex: index),
             ),
           ),
           if (_splitLines.length > 2) ...<Widget>[

@@ -174,6 +174,11 @@ When filters change:
   - Payment methods loaded from the `payment_methods` table are resolved through `NameAliases` (`aliases.resolve(NameKind.card, pm)`).
   - Already-merged cards fold cleanly into their canonical card name, preventing phantom duplicate merge suggestions under "Looks like duplicates" and redundant 0-count entries in "All cards & accounts".
   - Suggestion cards (`_SuggestionCard`) are interactive via `InkWell` so tapping anywhere on the card or the button initiates the merge dialog.
+- **Reactive Split Auto-Balancing (`SplitScreen`, `AddTransactionScreen`, `core/splits.dart`)**:
+  - The last row in a split builder always automatically carries the remaining balance (`withRemainderInLast`).
+  - Editing any row above the last row dynamically recalculates and updates the balance into the last row in real time on every keystroke, ensuring figures stay balanced without requiring manual calculation or pressing an auto-balance button.
+  - Editing the last row directly is preserved as manual input without auto-overwriting, immediately highlighting any unbalanced difference with a difference banner (`Allocated ₹X of ₹Y (Difference: ₹Z)`), with an auxiliary "Auto-balance" button to snap the last row back to the true balance on demand.
+  - Consistent across existing transaction splits (`SplitScreen`) and new entries across all entry points (`AddTransactionScreen` via `+`, Email transactions, and unadded SMS).
 
 ---
 
