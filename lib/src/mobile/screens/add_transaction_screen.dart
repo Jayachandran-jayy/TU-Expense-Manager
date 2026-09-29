@@ -157,8 +157,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     // From the unadded-SMS inbox: the message failed a full parse, but the
-    // amount and payment method alone are often still readable. Left blank, as
-    // today, when they aren't — the fields stay editable either way.
+    // amount, payment method, merchant, and date/time alone are often still readable.
     if (widget.initialSmsBody case final String body) {
       final double? amount = SmsParser.extractAmountOnly(body);
       if (amount != null) _amountController.text = amount.toStringAsFixed(2);
@@ -171,6 +170,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           _addedPaymentTypes.add(instrument);
         }
         _paymentType = instrument;
+      }
+
+      if (_selectedMerchant == null || _selectedMerchant!.isEmpty) {
+        final merchant = SmsParser.extractMerchantOnly(body);
+        if (merchant != null && merchant.isNotEmpty) {
+          _selectedMerchant = merchant;
+          _lookupMerchantDefault(merchant);
+        }
+      }
+
+      final date = SmsParser.extractDateOnly(body, receivedAt: widget.initialDate);
+      if (date != null) {
+        _selectedDate = date;
       }
     }
   }

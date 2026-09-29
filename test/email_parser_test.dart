@@ -215,6 +215,76 @@ void main() {
       expect(d2?.date.hour, 10);
       expect(d2?.date.minute, 30);
       expect(d2?.hasTime, isTrue);
+
+      final d3 = EmailParser.extractDateOnly(
+        'on 22-09-2026',
+        fallbackDate: DateTime(2026, 9, 22, 17, 45, 10),
+      );
+      expect(d3?.date.hour, 17);
+      expect(d3?.date.minute, 45);
+      expect(d3?.date.second, 10);
+      expect(d3?.hasTime, isFalse);
+    });
+
+    test('borrows arrival timestamp time when message body lacks clock time', () {
+      const email = '''
+        INR 450.00 has been debited from your HDFC Bank Card ending 9012 towards SWIGGY on 21-09-2026.
+      ''';
+      final fallback = DateTime(2026, 9, 21, 14, 25, 30);
+      final parsed = EmailParser.parse(email, fallbackDate: fallback);
+      expect(parsed, isNotNull);
+      expect(parsed!.hasExplicitTime, isFalse);
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 9);
+      expect(parsed.date.day, 21);
+      expect(parsed.date.hour, 14);
+      expect(parsed.date.minute, 25);
+      expect(parsed.date.second, 30);
+    });
+
+    test('preserves explicit clock time over fallback arrival time', () {
+      const email = '''
+        Thank you for using your HDFC Bank Credit Card ending in 8174 for INR 1,599.00 at AMAZON on 22-09-2026 at 16:40:15.
+      ''';
+      final fallback = DateTime(2026, 9, 22, 18, 0, 0);
+      final parsed = EmailParser.parse(email, fallbackDate: fallback);
+      expect(parsed, isNotNull);
+      expect(parsed!.hasExplicitTime, isTrue);
+      expect(parsed.date.hour, 16);
+      expect(parsed.date.minute, 40);
+      expect(parsed.date.second, 15);
+    });
+
+    test('parses various bank templates with explicit clock times', () {
+      // SBI with 'at' and 12-hour PM
+      const sbi = '''
+        Thank you for using your SBI Credit Card ending in 4321 for Rs. 1,299.50 at MYNTRA on 22/09/2026 at 2:30 PM.
+      ''';
+      final parsedSbi = EmailParser.parse(sbi);
+      expect(parsedSbi, isNotNull);
+      expect(parsedSbi!.hasExplicitTime, isTrue);
+      expect(parsedSbi.date.hour, 14);
+      expect(parsedSbi.date.minute, 30);
+
+      // IndusInd with comma and clock time
+      const indusind = '''
+        Thank you for using your IndusInd Bank Credit Card ending 6789 for INR 1,890.00 at CCD on 22-09-2026, 19:15:00.
+      ''';
+      final parsedIndus = EmailParser.parse(indusind);
+      expect(parsedIndus, isNotNull);
+      expect(parsedIndus!.hasExplicitTime, isTrue);
+      expect(parsedIndus.date.hour, 19);
+      expect(parsedIndus.date.minute, 15);
+
+      // Generic template with ISO-like date and time
+      const generic = '''
+        INR 500.00 has been debited from your Card ending 1234 at STORE on 2026-09-22 13:45:00.
+      ''';
+      final parsedGen = EmailParser.parse(generic);
+      expect(parsedGen, isNotNull);
+      expect(parsedGen!.hasExplicitTime, isTrue);
+      expect(parsedGen.date.hour, 13);
+      expect(parsedGen.date.minute, 45);
     });
   });
 }

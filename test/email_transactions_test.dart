@@ -349,5 +349,99 @@ void main() {
       expect(find.text('SWIGGY'), findsOneWidget);
       expect(find.text('HDFC Bank Card 1234'), findsOneWidget);
     });
+
+    testWidgets('tapping an email pre-fills email arrival time when message lacks clock time',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final fake = FakeEmailAdapter();
+      final service = EmailService.instance;
+      service.setAdapterForTesting(fake);
+      await service.saveCredentials('user@gmail.com', 'pass123456789012');
+
+      final emailArrival = DateTime(2026, 9, 22, 15, 45, 0);
+      fake.cannedEmails = <EmailMessageItem>[
+        EmailMessageItem(
+          id: 'email_time_test',
+          subject: 'HDFC Alert',
+          from: 'alerts@hdfcbank.net',
+          date: emailArrival,
+          body: 'Thank you for using your HDFC Bank Credit Card ending in 1234 for INR 750.00 at SWIGGY on 22-09-2026.',
+          parsed: EmailParser.parse(
+            'Thank you for using your HDFC Bank Credit Card ending in 1234 for INR 750.00 at SWIGGY on 22-09-2026.',
+            fallbackDate: emailArrival,
+          ),
+        ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EmailTransactionsScreen(
+            categories: categories,
+            merchants: merchants,
+            paymentTypes: paymentTypes,
+            transactions: const <ExpenseTxn>[],
+            onChanged: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('HDFC Alert'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AddTransactionScreen), findsOneWidget);
+      expect(find.text('3:45 PM'), findsOneWidget);
+      expect(find.text('12:00 AM'), findsNothing);
+    });
+
+    testWidgets('tapping an email pre-fills explicit transaction clock time from body',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final fake = FakeEmailAdapter();
+      final service = EmailService.instance;
+      service.setAdapterForTesting(fake);
+      await service.saveCredentials('user@gmail.com', 'pass123456789012');
+
+      final emailArrival = DateTime(2026, 9, 22, 18, 0, 0);
+      fake.cannedEmails = <EmailMessageItem>[
+        EmailMessageItem(
+          id: 'email_explicit_time_test',
+          subject: 'ICICI Alert',
+          from: 'alerts@icici.com',
+          date: emailArrival,
+          body: 'Your ICICI Bank Credit Card XX1004 has been used for a transaction of INR 2,499.00 on Sep 22, 2026 at 11:20:00. Info: FLIPKART.',
+          parsed: EmailParser.parse(
+            'Your ICICI Bank Credit Card XX1004 has been used for a transaction of INR 2,499.00 on Sep 22, 2026 at 11:20:00. Info: FLIPKART.',
+            fallbackDate: emailArrival,
+          ),
+        ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EmailTransactionsScreen(
+            categories: categories,
+            merchants: merchants,
+            paymentTypes: paymentTypes,
+            transactions: const <ExpenseTxn>[],
+            onChanged: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('ICICI Alert'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AddTransactionScreen), findsOneWidget);
+      expect(find.text('11:20 AM'), findsOneWidget);
+      expect(find.text('12:00 AM'), findsNothing);
+    });
   });
 }

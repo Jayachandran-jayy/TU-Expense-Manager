@@ -89,14 +89,12 @@ const String _amt = r'(?<amount>[\d,]+(?:\.\d{1,2})?)';
 /// time is never truncated to its bare date by an earlier alternative.
 /// `_parseDate` reports whether the match actually included a clock time.
 const String _date = r'(?<date>'
-    r'\d{4}-\d{2}-\d{2}:\d{2}:\d{2}:\d{2}' //          2026-08-13:07:19:26
-    r'|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\s+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?' // 13-08-2026 09:21:35 am, 23-08-2026 10:29 am
-    r'|\d{1,2}-[A-Za-z]{3}-\d{2,4}\s+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?' // 11-Aug-26 12:30 pm
-    r'|\d{1,2}[A-Za-z]{3}\d{2,4}\s+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?' // 11Aug26 12:30 pm
-    r'|\d{1,2}-[A-Za-z]{3}-\d{2,4}' //                          11-Aug-26
-    r'|\d{1,2}[A-Za-z]{3}\d{2,4}' //                            11Aug26
-    r'|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}' //                        10/08/26
-    r'|\d{1,2}[-/]\d{1,2}' //                                   13-09, 01-09
+    r'\d{4}[-/.]\d{2}[-/.]\d{2}(?:[:\sT]+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 2026-08-13 07:19:26, 2026-08-13:07:19:26, 2026-08-13T07:19:26
+    r'|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 13-08-2026 09:21:35 am, 13-08-2026, 10:29 am, 13.08.2026, 10/08/26
+    r'|\d{1,2}[- /.](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[- /.](?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 11-Aug-26 12:30 pm
+    r'|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+(?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // Sep 21, 2026 at 11:20:00
+    r'|\d{1,2}[A-Za-z]{3}\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 11Aug26 12:30 pm
+    r'|\d{1,2}[-/]\d{1,2}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 13-09 14:30, 13-09
     r')';
 
 /// Optional "Ref 213313774670" / "Refno 123456789" / "UTR: 123456789" directly
@@ -297,6 +295,62 @@ class SmsParser {
     return null;
   }
 
+  /// Loose extraction of a transaction date and time from an SMS message body.
+  /// Used for pre-filling the Date/Time field when an SMS is added manually or
+  /// via the Unadded SMS inbox.
+  static DateTime? extractDateOnly(String body, {DateTime? receivedAt}) {
+    final parsed = parse(body, receivedAt: receivedAt);
+    if (parsed != null) {
+      if (parsed.hasExplicitTime || receivedAt == null) return parsed.date;
+      return DateTime(
+        parsed.date.year,
+        parsed.date.month,
+        parsed.date.day,
+        receivedAt.hour,
+        receivedAt.minute,
+        receivedAt.second,
+      );
+    }
+
+    final match = RegExp(_date, caseSensitive: false).firstMatch(body);
+    if (match != null) {
+      final raw = match.namedGroup('date') ?? match.group(0);
+      if (raw != null) {
+        final stamp = _parseDate(raw, defaultYear: receivedAt?.year ?? DateTime.now().year);
+        if (stamp != null) {
+          if (stamp.hasTime || receivedAt == null) return stamp.date;
+          return DateTime(
+            stamp.date.year,
+            stamp.date.month,
+            stamp.date.day,
+            receivedAt.hour,
+            receivedAt.minute,
+            receivedAt.second,
+          );
+        }
+      }
+    }
+    return receivedAt;
+  }
+
+  /// Standalone extraction of a merchant name from an SMS message.
+  static String? extractMerchantOnly(String body) {
+    final parsed = parse(body);
+    if (parsed != null && parsed.merchant.isNotEmpty) {
+      return parsed.merchant;
+    }
+
+    final match = RegExp(
+      r'(?:at|to|@|towards|vpa)\s+([A-Za-z0-9\s._&/-]+?)(?:\s+(?:on|by|via|Ref|UTR|Avl|Bal)|\.|$)',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (match != null) {
+      final cleaned = cleanMerchantName(match.group(1)!);
+      if (cleaned.isNotEmpty && cleaned.length > 1) return cleaned;
+    }
+    return null;
+  }
+
   /// Returns `null` when no template matches, which is how OTPs, promos and
   /// statement alerts get filtered out.
   ///
@@ -372,28 +426,37 @@ class SmsParser {
     'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
   };
 
-  /// `yyyy-MM-dd:HH:mm:ss`
-  static final RegExp _isoish =
-      RegExp(r'^(\d{4})-(\d{2})-(\d{2}):(\d{2}):(\d{2}):(\d{2})$');
+  /// `yyyy-MM-dd[: ]HH:mm[:ss]` with optional `T` or `:` or space
+  static final RegExp _isoish = RegExp(
+    r'^(\d{4})[-/.](\d{2})[-/.](\d{2})(?:[:\sT]+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
+    caseSensitive: false,
+  );
 
-  /// `dd-MM-yyyy`, `dd/MM/yy`, each with an optional `HH:mm[:ss]` and `am`/`pm`.
+  /// `dd-MM-yyyy`, `dd/MM/yy`, `dd.MM.yyyy`, each with an optional `HH:mm[:ss]` and `am`/`pm`.
   static final RegExp _numeric = RegExp(
-    r'^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})'
-    r'(?:\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
+    r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})'
+    r'(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
     caseSensitive: false,
   );
 
   /// `dd-MM` or `dd/MM` without year, with an optional `HH:mm[:ss]` and `am`/`pm`.
   static final RegExp _numericShort = RegExp(
-    r'^(\d{1,2})[-/](\d{1,2})'
-    r'(?:\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
+    r'^(\d{1,2})[-/.](\d{1,2})'
+    r'(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
     caseSensitive: false,
   );
 
-  /// `11-Aug-26`, `11Aug26`, `11-Aug-2026`, with an optional `HH:mm[:ss]` and `am`/`pm`.
+  /// `11-Aug-26`, `11Aug26`, `11-Aug-2026`, `11 Aug 2026`, with an optional `HH:mm[:ss]` and `am`/`pm`.
   static final RegExp _named = RegExp(
-    r'^(\d{1,2})-?([A-Za-z]{3})-?(\d{2,4})'
-    r'(?:\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
+    r'^(\d{1,2})[- /.]?([A-Za-z]{3,9})[- /.]?(\d{2,4})'
+    r'(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
+    caseSensitive: false,
+  );
+
+  /// Month-first named: `Aug 11, 2026`, `Sep 21, 2026 at 11:20:00`
+  static final RegExp _namedMonthFirst = RegExp(
+    r'^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})'
+    r'(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
     caseSensitive: false,
   );
 
@@ -406,14 +469,21 @@ class SmsParser {
 
     final iso = _isoish.firstMatch(value);
     if (iso != null) {
+      final hasTime = iso.group(4) != null;
+      var hour = hasTime ? int.parse(iso.group(4)!) : 0;
+      final meridiem = iso.group(7)?.toLowerCase();
+      if (meridiem == 'pm' && hour != 12) hour += 12;
+      if (meridiem == 'am' && hour == 12) hour = 0;
       return _build(
         year: int.parse(iso.group(1)!),
         month: int.parse(iso.group(2)!),
         day: int.parse(iso.group(3)!),
-        hour: int.parse(iso.group(4)!),
-        minute: int.parse(iso.group(5)!),
-        second: int.parse(iso.group(6)!),
-        hasTime: true,
+        hour: hour,
+        minute: hasTime ? int.parse(iso.group(5)!) : 0,
+        second: (hasTime && iso.group(6) != null)
+            ? int.parse(iso.group(6)!)
+            : 0,
+        hasTime: hasTime,
       );
     }
 
@@ -456,6 +526,16 @@ class SmsParser {
         month: _months[named.group(2)!.toLowerCase()],
         year: named.group(3)!,
         match: named,
+      );
+    }
+
+    final mFirst = _namedMonthFirst.firstMatch(value);
+    if (mFirst != null) {
+      return _fromParts(
+        day: mFirst.group(2)!,
+        month: _months[mFirst.group(1)!.toLowerCase()],
+        year: mFirst.group(3)!,
+        match: mFirst,
       );
     }
 
@@ -533,6 +613,6 @@ String tuCleanMerchantName(String value) {
     RegExp(r'^upi[\s_\-\/]+', caseSensitive: false),
     '',
   );
-  final cleaned = stripped.replaceFirst(RegExp(r'@+$'), '').trim();
+  final cleaned = stripped.replaceFirst(RegExp(r'[@.]+$'), '').trim();
   return cleaned.isEmpty ? trimmed : cleaned;
 }
