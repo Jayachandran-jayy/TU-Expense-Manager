@@ -44,7 +44,7 @@ Categorizing a merchant once applies to every past and future transaction from t
 ### 2. ✂️ Multi-Category Transaction Splitting
 Real-world spending rarely fits into a single bucket. When a single ₹3,450 payment covers groceries, home supplies, and snacks:
 - **Instant Split Editor**: Split any transaction into multiple custom categories and amounts.
-- **Auto-Balanced Remainder**: The last row automatically calculates the remaining balance as you type, ensuring your figures always add up down to the paisa.
+- **Auto-Balanced Remainder**: The last row automatically calculates the remaining balance as you type across both the split editor and manual/email transaction entry screens, ensuring your figures always add up down to the paisa.
 - **Accurate Charting**: Filtered views and monthly reports count only the exact split lines corresponding to each category.
 
 ### 3. ⚡ Automated Bank SMS Ingestion & Manual Cash Entry
@@ -547,7 +547,9 @@ on either tab. The split screen is rows of category and amount, and **the last r
 carries the balance**: type 1,200 against a ₹2,000 charge and the second row becomes 800 on
 its own; add a third and type 300 in the second, and the third becomes 500. Editing the last
 row directly is allowed and can leave the split unbalanced, which shows as
-"₹500 unallocated" or "₹200 over" and blocks Save until it is resolved.
+"₹500 unallocated" or "₹200 over" and blocks Save until it is resolved. This same live
+auto-balancing behavior applies when splitting a transaction in the **Add Transaction**
+screen (whether logged manually via `+`, pre-filled from an email alert, or via unadded SMS).
 
 Under a category filter a split contributes **only its matching lines** — the ₹2,000 Amazon
 row shows and totals ₹1,200 under Grocery. That is what keeps a filtered view's totals

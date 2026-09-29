@@ -793,7 +793,7 @@ void main() {
       expect(find.byIcon(Icons.delete_outline), findsNothing);
     });
 
-    testWidgets('auto-balance distributes the remainder', (tester) async {
+    testWidgets('auto-balances split amounts automatically when editing first line', (tester) async {
       setLargeViewport(tester);
 
       await tester.pumpWidget(buildScreen());
@@ -808,12 +808,18 @@ void main() {
       await tester.tap(find.byType(Switch));
       await tester.pumpAndSettle();
 
-      // Set first split line to 400
       final splitRowFields = find.byWidgetPredicate(
         (Widget w) => w is TextField && w.decoration?.prefixText == '₹',
       );
+      // Initially, the second row holds the full amount
+      expect(tester.widget<TextField>(splitRowFields.last).controller?.text, '1000.00');
+
+      // Set first split line to 400
       await tester.enterText(splitRowFields.first, '400');
       await tester.pumpAndSettle();
+
+      // Second row automatically receives the remainder (600.00) without clicking Auto-balance
+      expect(tester.widget<TextField>(splitRowFields.last).controller?.text, '600.00');
 
       // Pick category for second line
       await tester.tap(find.text('Pick category'));
@@ -821,14 +827,11 @@ void main() {
       await tester.tap(find.text('Grocery'));
       await tester.pumpAndSettle();
 
-      // Tap auto-balance
-      await tester.tap(find.text('Auto-balance'));
-      await tester.pumpAndSettle();
-
+      // Automatically balanced
       expect(find.textContaining('Balanced:'), findsOneWidget);
     });
 
-    testWidgets('unbalanced split shows the difference', (tester) async {
+    testWidgets('unbalanced split shows the difference when last line is manually edited', (tester) async {
       setLargeViewport(tester);
 
       await tester.pumpWidget(buildScreen());
@@ -843,15 +846,112 @@ void main() {
       await tester.tap(find.byType(Switch));
       await tester.pumpAndSettle();
 
-      // Set first split to 300
       final splitRowFields = find.byWidgetPredicate(
         (Widget w) => w is TextField && w.decoration?.prefixText == '₹',
       );
+
+      // Set first split to 300 -> second line automatically becomes 700.00
       await tester.enterText(splitRowFields.first, '300');
       await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(splitRowFields.last).controller?.text, '700.00');
 
-      // Without auto-balance, line 2 has the remainder or 0 — status shows Allocated
+      // Now manually edit the second line to 500 (creating an unbalanced split of 800/1000)
+      await tester.enterText(splitRowFields.last, '500');
+      await tester.pumpAndSettle();
+
+      // Manual edit on last row is preserved and difference is displayed
       expect(find.textContaining('Allocated'), findsOneWidget);
+      expect(find.textContaining('Difference:'), findsOneWidget);
+
+      // Tapping Auto-balance restores the remaining balance into the last line
+      await tester.tap(find.text('Auto-balance'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(splitRowFields.last).controller?.text, '700.00');
+    });
+
+    testWidgets('email add transaction prefill auto-balances split remainder on row edit', (tester) async {
+      setLargeViewport(tester);
+
+      // Pre-filled from email parsing (e.g. Swiggy ₹2,500 via HDFC Card)
+      await tester.pumpWidget(MaterialApp(
+        home: AddTransactionScreen(
+          categories: categories,
+          merchants: merchants,
+          initialAmount: 2500,
+          initialMerchant: 'Swiggy',
+          initialPaymentType: 'HDFC Card 8174',
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      // Verify prefilled amount
+      expect(find.text('2500.00'), findsOneWidget);
+
+      // Toggle split on
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+
+      final splitRowFields = find.byWidgetPredicate(
+        (Widget w) => w is TextField && w.decoration?.prefixText == '₹',
+      );
+      // Row 2 initially holds the full ₹2,500
+      expect(tester.widget<TextField>(splitRowFields.last).controller?.text, '2500.00');
+
+      // Enter 1500 into first split line
+      await tester.enterText(splitRowFields.first, '1500');
+      await tester.pumpAndSettle();
+
+      // Second row automatically rebalances to 1000.00
+      expect(tester.widget<TextField>(splitRowFields.last).controller?.text, '1000.00');
+    });
+
+    testWidgets('multi-line split cascades remainder into the last row', (tester) async {
+      setLargeViewport(tester);
+
+      await tester.pumpWidget(buildScreen());
+      await tester.pumpAndSettle();
+
+      // Enter 1000
+      final amountField = find.byType(TextFormField).first;
+      await tester.enterText(amountField, '1000');
+      await tester.pumpAndSettle();
+
+      // Toggle split on
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+
+      final splitRowFields = find.byWidgetPredicate(
+        (Widget w) => w is TextField && w.decoration?.prefixText == '₹',
+      );
+
+      // Line 0 is set to 400 -> line 1 automatically becomes 600.00
+      await tester.enterText(splitRowFields.at(0), '400');
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(splitRowFields.at(1)).controller?.text, '600.00');
+
+      // Edit line 1 to 350 -> remaining 250 is unallocated
+      await tester.enterText(splitRowFields.at(1), '350');
+      await tester.pumpAndSettle();
+
+      // Add a third split line -> it takes the remaining 250
+      await tester.tap(find.text('Add split line'));
+      await tester.pumpAndSettle();
+
+      final threeSplitFields = find.byWidgetPredicate(
+        (Widget w) => w is TextField && w.decoration?.prefixText == '₹',
+      );
+      expect(threeSplitFields, findsNWidgets(3));
+      expect(tester.widget<TextField>(threeSplitFields.at(2)).controller?.text, '250.00');
+
+      // Now edit line 0 to 500 -> last line (line 2) automatically rebalances to 150.00
+      await tester.enterText(threeSplitFields.at(0), '500');
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(threeSplitFields.at(2)).controller?.text, '150.00');
+
+      // Edit line 1 to 200 -> last line (line 2) automatically rebalances to 300.00
+      await tester.enterText(threeSplitFields.at(1), '200');
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(threeSplitFields.at(2)).controller?.text, '300.00');
     });
 
     testWidgets('split line category can be picked from the sheet',
