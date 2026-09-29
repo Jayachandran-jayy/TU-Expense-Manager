@@ -51,12 +51,14 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 - **Automatic Intake**: Reads transactional SMS from major banks and UPI gateways in real time without waking up unnecessary background services.
 - **Manual Cash Tracking**: Need to record cash payments or transactions from unlinked accounts? Tap **+ Add Transaction** to log entries manually in seconds.
 - **Safe & Idempotent**: Multi-layer deduplication prevents double-counting, even if bank alerts are received multiple times or rescanned.
+- **Accurate Clock Time Extraction**: Accurately extracts explicit transaction clock times from diverse SMS timestamp formats (including ISO, commas, dots, `at`, and month-first names). When SMS bodies contain only a calendar date, the parser borrows the message arrival time (or defaults to midnight for manual paste) rather than zeroing timestamps.
 
 ### 4. ✉️ Email Transaction Support (Gmail IMAP & Manual Paste)
 Missing bank SMS alerts due to carrier network drops or telecom delivery issues? TU Expense Tracker bridges the gap with comprehensive email support:
 - **Direct Gmail Connect**: Connect via secure IMAP TLS (`imap.gmail.com:993`) using a standard 16-character Google App Password — no complicated Cloud Console OAuth setup required.
 - **Smart Pre-Filtering**: Scans transaction emails across 7, 14, or 30 days lookback ranges using targeted keyword matching (`debited`, `spent`, `credited`, `received`, `card`, `a/c`).
 - **Selective Manual Verification (No Bulk Auto-Add)**: Browse emails in an intuitive list, search in real-time, and review parsed details in `AddTransactionScreen` before saving to your ledger.
+- **Precise Timing Preservation**: Extracts explicit transaction times from all major issuer email alerts (HDFC, ICICI, SBI, Axis, Yes, Kotak, IndusInd), and borrows the email message arrival timestamp when explicit times are absent, avoiding arbitrary 12:00 AM defaults.
 - **Quick Paste Dialog**: Copy email transaction text directly from any mail app and paste it into the quick paste dialog for instant regex extraction.
 - **Ledger Deduplication Badges**: Emails matching transactions already recorded in your ledger display an `Added` badge to prevent duplicate charges.
 - **Dismiss & Hide**: Dismiss irrelevant notification emails with a single tap.
