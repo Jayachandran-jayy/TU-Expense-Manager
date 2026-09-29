@@ -11,62 +11,72 @@ This skill covers the project structure, design invariants, database schema, SMS
 
 > [!IMPORTANT]
 > ### 📋 Mandatory Development Protocols
-> 1. **Mandatory Documentation Synchronization Protocol**:
+> 1. **Mandatory Planning Mode (`/plan`) Enforcement Protocol (P0 Invariant)**:
+>    Whenever the user invokes `/plan` or requests planning mode:
+>    - **STRICTLY READ-ONLY**: You MUST NOT edit, write, or delete any project files, and you MUST NOT execute any state-altering commands. Only read-only tools (`view_file`, code search, directory listing) are permitted.
+>    - **Mandatory Implementation Plan Artifact**: You must research the task thoroughly and write an implementation plan artifact with `RequestFeedback: true` and `UserFacing: true` at `<Artifact Directory>/<plan_name>.md`.
+>    - **Immediate Turn Halt**: Immediately after creating or updating the plan artifact, you MUST stop your turn without touching any code files.
+>    - **Never Pre-empt Plan Approval**: Never edit files, stage changes, or start execution until the user has explicitly reviewed and approved the plan.
+>
+> 2. **Mandatory Documentation Synchronization Protocol**:
 >    Whenever code changes, architectural enhancements, UI redesigns, database schema updates, or workflow improvements are made in this repository, **THEY MUST ALWAYS BE SYNCHRONIZED AND UPDATED IN BOTH**:
 >    - **This developer skill (`.agents/skills/expense-tracker-dev/SKILL.md`)**
 >    - **The project root documentation (`README.md`)**
 >    Never leave the skill or `README.md` outdated after making feature additions or bug fixes.
 >
-> 2. **Mandatory Test-by-Default Protocol**:
+> 3. **Mandatory Test-by-Default Protocol**:
 >    Whenever any new feature, UI enhancement, architectural change, or bug fix is implemented, **IT MUST BE TESTED BY DEFAULT**:
 >    - Add and update unit, widget, or integration tests covering all new logic, UI states, lifecycle hooks, and error handling.
 >    - Always execute the full test suite (`flutter test`) and static analysis (`dart analyze`) to ensure a 100% pass rate and zero warnings.
 >    - Never conclude a task or mark a feature complete without running and verifying the automated test suites.
 >
-> 3. **Mandatory Visual Asset & Screenshot Synchronization Protocol**:
+> 4. **Mandatory Visual Asset & Screenshot Synchronization Protocol**:
 >    Whenever any UI component, screen layout, theme/palette, feature workflow, or Android installation/permission step is added, redesigned, or updated, **THE RELEVANT SCREENSHOTS IN `docs/screenshots/` AND THEIR REFERENCES IN `README.md` MUST BE IMMEDIATELY RE-CAPTURED AND UPDATED**:
 >    - If a feature or UI page changes (e.g. Dashboard donut/charts, Transactions cards/filters, Split editor, Merchant Defaults, Themes/OLED), launch the Android Virtual Device (`emulator-5554`), seed realistic demo data, navigate to the screen, and capture fresh high-resolution screenshots.
 >    - If installation, permission, or Play Protect handling flows change, re-capture or update the system walkthrough graphics (`install_play_protect.png`, `install_restricted_settings.png`, `install_sms_permission.png`, `install_app_info.png`).
 >    - Never leave stale, outdated, or mismatched screenshots in `docs/screenshots/` or `README.md` after modifying UI or user-facing flows.
 >
-> 4. **Mandatory Git Workflow Protocol**:
+> 5. **Mandatory Git Workflow & P1 Remote Push Gating Protocol**:
 >    - **NEVER merge or push code directly to the `main` branch under any circumstances.**
 >    - All changes must be made on a feature or bugfix branch and merged exclusively via Pull Requests.
->    - **Branch naming**: Use descriptive prefixes — `feature/`, `bugfix/`, `chore/`, etc. (e.g. `feature/undo-toast`).
+>    - **P1 GATING RULE — ZERO REMOTE PUSHES WITHOUT EXPLICIT MANUAL USER APPROVAL**:
+>      Even after the user approves a plan and you enter edit/implementation mode, **YOU MUST NOT PUSH ANYTHING TO ANY REMOTE REPOSITORY** (GitHub or GitLab) without explicit, manual user authorization:
+>      - You may edit local files, compile, run `dart analyze`, and execute `flutter test`.
+>      - You may create local branches and commit local changes with descriptive messages.
+>      - **BEFORE RUNNING `git push`, `gh pr create` (which pushes to remote), `gh pr merge`, `git push origin vX.Y.Z`, or pushing to GitLab `fdroiddata`, YOU MUST STOP AND ASK FOR EXPLICIT MANUAL USER APPROVAL.**
+>      - State the exact branch, tag, or MR changes ready to be pushed and wait for the user to reply with explicit permission (e.g., "proceed to push", "approved to push").
+>      - **This is a P1 step. Never skip this.**
+>    - **Branch naming**: Use descriptive prefixes — `feature/`, `bugfix/`, `chore/`, `docs/`, etc. (e.g. `feature/undo-toast`).
 >    - **Full procedure when currently on `main`**:
 >      1. Create and switch to a new branch: `git checkout -b feature/<name>`
->      2. Implement the changes, commit with a clear message.
->      3. Push the branch: `git push -u origin feature/<name>`
->      4. Open a Pull Request against `main` using the GitHub CLI: `gh pr create --base main --fill`
->      5. Merge the PR: `gh pr merge --squash --delete-branch`
->      6. Pull the merged main locally: `git checkout main && git pull`
->      7. **Tag the release** (unless the user explicitly says no tag): `git tag vX.Y.Z && git push origin vX.Y.Z`
->         - Follow semantic versioning: patch bump (`vX.Y.Z+1`) for bug fixes/minor UI, minor bump (`vX.Y+1.0`) for new features.
->         - Check the latest tag with `git tag --sort=-version:refname | head -5` before deciding the next version.
+>      2. Implement changes locally, run `dart analyze` and `flutter test`. Commit locally with a clear message.
+>      3. **P1 GATING STEP**: Stop and present the committed changes and test results to the user. Ask: *"Ready to push branch to GitHub and open PR? Please confirm."*
+>      4. **Only after explicit user approval**: Push the branch (`git push -u origin feature/<name>`) and open PR (`gh pr create --base main --fill`).
+>      5. **P1 GATING STEP**: Stop and ask: *"PR #XX is open. Ready to squash-merge into main? Please confirm."*
+>      6. **Only after explicit user approval**: Merge PR (`gh pr merge --squash --delete-branch`) and pull locally (`git checkout main && git pull`).
+>      7. **P1 GATING STEP**: Ask: *"Ready to tag release vX.Y.Z and push tag to origin? Please confirm."*
+>      8. **Only after explicit user approval**: Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 >    - **Full procedure when already on a feature/bugfix branch** (not `main`):
->      1. Continue making changes and committing on the current branch.
->      2. Push the branch: `git push -u origin <current-branch>`
->      3. Open a PR against `main`: `gh pr create --base main --fill`
->      4. Merge the PR: `gh pr merge --squash --delete-branch`
->      5. Pull the merged main locally: `git checkout main && git pull`
->      6. **Tag the release** (unless the user explicitly says no tag) — same semver rules as above.
->    - **Tagging is optional**: The user will explicitly say "no tag" or "skip tag" if they don't want one. Otherwise, always tag after merging.
+>      1. Continue making changes, verifying tests, and committing locally on current branch.
+>      2. **P1 GATING STEP**: Request explicit user approval before running `git push -u origin <current-branch>`.
+>      3. Once approved, push and open PR against `main`. Follow the same gating steps before merging or tagging.
 >
-> 5. **Mandatory PR/MR Description Protocol**:
+> 6. **Mandatory PR/MR Description Protocol**:
 >    Whenever a new branch is created and a Pull Request (PR) or Merge Request (MR) is opened or updated, **YOU MUST GENERATE AND UPDATE THE RELEVANT MR/PR DESCRIPTION**:
 >    - Provide a clear template with the title, summary of changes, and technical notes for reviewers.
 >    - If updating an existing PR via GitHub CLI (`gh pr edit`), automatically apply the generated description.
 >    - Never leave the user without a comprehensive description to copy-paste or submit when code is pushed to a branch.
 >
-> 6. **Mandatory F-Droid In-Flight MR Maintenance Protocol (Until MR !48556 is Merged)**:
+> 7. **Mandatory F-Droid In-Flight MR Maintenance Protocol (Until MR !48556 is Merged)**:
 >    F-Droid inclusion MR [!48556](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48556) is currently pending review/testing in F-Droid's queue.
 >    Maintainer instruction: *"This MR is mostly ready. We'll test it later. If everything works well we'll merge it. Meantime if you release a new version please update this MR."*
->    - **CRITICAL**: Whenever a new app version is released upstream while MR !48556 is still open, **YOU MUST IMMEDIATELY UPDATE `fdroiddata` (`metadata/com.tu.expense.manager.yml`) AND PUSH TO MR !48556**.
+>    - **CRITICAL**: Whenever a new app version is released upstream while MR !48556 is still open, **YOU MUST UPDATE `fdroiddata` (`metadata/com.tu.expense.manager.yml`)**.
 >    - Ensure split APK version codes (`<buildNumber>1`, `<buildNumber>2`, `<buildNumber>3`) are added.
 >    - Ensure `autoCheckEnabled()` remains `false` by default.
 >    - Ensure runtime F-Droid intent (`fdroidrepo://`, `fdroidapp://`) and package/store detection continues to suppress update checks and displays *"Updates managed externally"*.
 >    - Ensure Fastlane metadata descriptions use HTML (never Markdown).
->    - Verify reproducible build via Docker (`fdroid build --stop --flavor split com.tu.expense.manager:<versionCode>`) before pushing to GitLab `master`.
+>    - Verify reproducible build via Docker (`fdroid build --stop --flavor split com.tu.expense.manager:<versionCode>`).
+>    - **P1 GATING STEP**: Before running `git push origin master` in `/Users/jay/Documents/projects/fdroiddata`, **ASK FOR EXPLICIT MANUAL USER APPROVAL**. Push to GitLab only after the user approves.
 
 ---
 
