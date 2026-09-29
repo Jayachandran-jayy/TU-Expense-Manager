@@ -36,30 +36,29 @@ This skill covers the project structure, design invariants, database schema, SMS
 >    - If installation, permission, or Play Protect handling flows change, re-capture or update the system walkthrough graphics (`install_play_protect.png`, `install_restricted_settings.png`, `install_sms_permission.png`, `install_app_info.png`).
 >    - Never leave stale, outdated, or mismatched screenshots in `docs/screenshots/` or `README.md` after modifying UI or user-facing flows.
 >
-> 5. **Mandatory Git Workflow & P1 Remote Push Gating Protocol**:
->    - **NEVER merge or push code directly to the `main` branch under any circumstances.**
->    - All changes must be made on a feature or bugfix branch and merged exclusively via Pull Requests.
->    - **P1 GATING RULE — ZERO REMOTE PUSHES WITHOUT EXPLICIT MANUAL USER APPROVAL**:
->      Even after the user approves a plan and you enter edit/implementation mode, **YOU MUST NOT PUSH ANYTHING TO ANY REMOTE REPOSITORY** (GitHub or GitLab) without explicit, manual user authorization:
->      - You may edit local files, compile, run `dart analyze`, and execute `flutter test`.
->      - You may create local branches and commit local changes with descriptive messages.
->      - **BEFORE RUNNING `git push`, `gh pr create` (which pushes to remote), `gh pr merge`, `git push origin vX.Y.Z`, or pushing to GitLab `fdroiddata`, YOU MUST STOP AND ASK FOR EXPLICIT MANUAL USER APPROVAL.**
->      - State the exact branch, tag, or MR changes ready to be pushed and wait for the user to reply with explicit permission (e.g., "proceed to push", "approved to push").
->      - **This is a P1 step. Never skip this.**
->    - **Branch naming**: Use descriptive prefixes — `feature/`, `bugfix/`, `chore/`, `docs/`, etc. (e.g. `feature/undo-toast`).
->    - **Full procedure when currently on `main`**:
->      1. Create and switch to a new branch: `git checkout -b feature/<name>`
->      2. Implement changes locally, run `dart analyze` and `flutter test`. Commit locally with a clear message.
->      3. **P1 GATING STEP**: Stop and present the committed changes and test results to the user. Ask: *"Ready to push branch to GitHub and open PR? Please confirm."*
->      4. **Only after explicit user approval**: Push the branch (`git push -u origin feature/<name>`) and open PR (`gh pr create --base main --fill`).
->      5. **P1 GATING STEP**: Stop and ask: *"PR #XX is open. Ready to squash-merge into main? Please confirm."*
->      6. **Only after explicit user approval**: Merge PR (`gh pr merge --squash --delete-branch`) and pull locally (`git checkout main && git pull`).
->      7. **P1 GATING STEP**: Ask: *"Ready to tag release vX.Y.Z and push tag to origin? Please confirm."*
->      8. **Only after explicit user approval**: Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
->    - **Full procedure when already on a feature/bugfix branch** (not `main`):
->      1. Continue making changes, verifying tests, and committing locally on current branch.
->      2. **P1 GATING STEP**: Request explicit user approval before running `git push -u origin <current-branch>`.
->      3. Once approved, push and open PR against `main`. Follow the same gating steps before merging or tagging.
+> 5. **Mandatory 3-Stage Development Lifecycle & Remote Push Protocol**:
+>    All repository development must strictly adhere to three distinct operational stages:
+>
+>    - **Stage 1: Plan Mode (`/plan`)**
+>      - **STRICTLY READ-ONLY**: Do NOT edit, write, or delete any project files, and do NOT run any state-altering commands.
+>      - Research the task, formulate the architecture, and generate the implementation plan artifact (`<plan_name>.md`) with `RequestFeedback: true`.
+>      - **Immediate Turn Halt**: Stop immediately upon presenting the plan and wait for explicit user approval before touching code.
+>
+>    - **Stage 2: Accept Edit Mode (Plan Approved)**
+>      - **LOCAL WORK ONLY**: Implement code changes, edit files, run `dart analyze`, and execute `flutter test`.
+>      - Create local feature/bugfix branches and commit changes locally with clear messages.
+>      - **ZERO REMOTE PUSHES**: You must NOT push anything to any remote repository (GitHub or GitLab) in this stage.
+>      - When local tests pass and work is complete, present the summary to the user and await manual authorization to push.
+>
+>    - **Stage 3: Push & Release Mode (Triggered when user says "push" / "push the changes")**
+>      - Once the user explicitly instructs to push, you have full authorization to complete the entire remote pipeline without intermediate pauses:
+>        1. Push the branch to GitHub: `git push -u origin <branch>`.
+>        2. Open the Pull Request: `gh pr create --base main --fill`.
+>        3. Squash-merge the Pull Request: `gh pr merge --squash --delete-branch`.
+>        4. Pull merged `main` locally: `git checkout main && git pull`.
+>        5. Tag the release if required: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+>        6. Update F-Droid metadata in `/Users/jay/Documents/projects/fdroiddata` and push to GitLab `master` if required.
+>      - You do not need to pause for separate approvals between pushing, merging, tagging, and F-Droid syncing once Stage 3 is authorized.
 >
 > 6. **Mandatory PR/MR Description Protocol**:
 >    Whenever a new branch is created and a Pull Request (PR) or Merge Request (MR) is opened or updated, **YOU MUST GENERATE AND UPDATE THE RELEVANT MR/PR DESCRIPTION**:
