@@ -88,6 +88,7 @@ class TransactionsTab extends StatelessWidget {
     required this.onToggleSelected,
     required this.onDelete,
     this.emptyDetail,
+    this.onAddTransaction,
   });
 
   /// The rows to show: already filtered, already in order.
@@ -137,6 +138,7 @@ class TransactionsTab extends StatelessWidget {
   /// The default tells the reader to scan their SMS inbox, which is true on a
   /// phone and nonsense in a browser.
   final String? emptyDetail;
+  final VoidCallback? onAddTransaction;
 
   /// Three filters and an order, two of which take several values at once, do
   /// not fit as dropdowns side by side — and Material has no multi-select one.
@@ -284,6 +286,7 @@ class TransactionsTab extends StatelessWidget {
                           onShowAllMonths: () => onFiltersChanged(
                               filters.copyWith(months: const <YearMonth>{})),
                           detailOverride: emptyDetail,
+                          onAddTransaction: onAddTransaction,
                         )
                       : ListView.builder(
                               // Bottom padding clears the FAB.
@@ -504,6 +507,7 @@ class _EmptyLedgerState extends StatelessWidget {
     required this.onClear,
     required this.onShowAllMonths,
     this.detailOverride,
+    this.onAddTransaction,
   });
 
   final EmptyReason reason;
@@ -516,6 +520,7 @@ class _EmptyLedgerState extends StatelessWidget {
   /// The default tells the reader to scan their SMS inbox, which is right on a
   /// phone and wrong anywhere the ledger arrived over a network.
   final String? detailOverride;
+  final VoidCallback? onAddTransaction;
 
   @override
   Widget build(BuildContext context) {
@@ -566,12 +571,20 @@ class _EmptyLedgerState extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 20),
-        // An empty ledger gets no button: the "Add Transaction" FAB is already on
-        // screen and the toolbar offers the inbox scan. An empty *month* gets
-        // "Show all months" rather than "Clear filters", because clearing would
+        // An empty ledger gets an explicit add button so manual entry is immediate
+        // even if the user didn't notice the FAB in the corner. An empty *month*
+        // gets "Show all months" rather than "Clear filters", because clearing would
         // reset to the very month that is empty — a button that visibly does
         // nothing reads as a bug.
-        if (reason == EmptyReason.month)
+        if (reason == EmptyReason.ledgerEmpty && onAddTransaction != null)
+          Center(
+            child: FilledButton.tonalIcon(
+              onPressed: onAddTransaction,
+              icon: const Icon(Icons.add),
+              label: const Text('Add transaction'),
+            ),
+          )
+        else if (reason == EmptyReason.month)
           Center(
             child: FilledButton.tonalIcon(
               onPressed: onShowAllMonths,

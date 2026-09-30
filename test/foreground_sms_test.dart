@@ -495,5 +495,30 @@ void main() {
       expect(txns.single.merchant, 'UBER');
       expect(txns.single.amount, 350.0);
     }));
+
+    testWidgets('denied SMS on first launch displays empty state with Add transaction button',
+        (WidgetTester tester) async => withClock(Clock.fixed(DateTime(2026, 8, 25)), () async {
+      setLargeViewport(tester);
+
+      final db = FakeDatabase();
+      final smsSource = FakeSmsSource(permissionGranted: false);
+
+      await tester.pumpWidget(TuExpenseTrackerApp(
+        database: db,
+        smsSource: smsSource,
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Dashboard'), findsWidgets);
+
+      // Switch to Transactions tab
+      await tester.tap(find.byIcon(Icons.receipt_long_outlined));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('No transactions yet'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Add transaction'), findsOneWidget);
+    }));
   });
 }
