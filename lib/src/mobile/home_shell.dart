@@ -1226,6 +1226,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               onTap: _openTransaction,
               onToggleSelected: _toggleSelected,
               onDelete: (ExpenseTxn txn) => _delete(<ExpenseTxn>[txn]),
+              onAddTransaction: _openAddTransaction,
             ),
             // Not const any more, and it needs the callback: a sync applies
             // edits made in a browser, so Settings can now change the ledger.
