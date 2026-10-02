@@ -57,8 +57,8 @@ This skill covers the project structure, design invariants, database schema, SMS
 >        3. Squash-merge the Pull Request: `gh pr merge --squash --delete-branch`.
 >        4. Pull merged `main` locally: `git checkout main && git pull`.
 >        5. Tag the release if required: `git tag vX.Y.Z && git push origin vX.Y.Z`.
->        6. Update F-Droid metadata in `/Users/jay/Documents/projects/fdroiddata` and push to GitLab `master` if required.
->      - You do not need to pause for separate approvals between pushing, merging, tagging, and F-Droid syncing once Stage 3 is authorized.
+>      - **Note on F-Droid Updates**: F-Droid inclusion MR !48556 has been merged! F-Droid's `checkupdates` bot automatically monitors Git tags (`vX.Y.Z`) on GitHub and updates `metadata/com.tu.expense.manager.yml` on `fdroiddata` on its own. **Manual GitLab MR updates to `fdroiddata` are NO LONGER NEEDED.**
+>      - You do not need to pause for separate approvals between pushing, merging, and tagging once Stage 3 is authorized.
 >
 > 6. **Mandatory PR/MR Description Protocol**:
 >    Whenever a new branch is created and a Pull Request (PR) or Merge Request (MR) is opened or updated, **YOU MUST GENERATE AND UPDATE THE RELEVANT MR/PR DESCRIPTION**:
@@ -66,16 +66,14 @@ This skill covers the project structure, design invariants, database schema, SMS
 >    - If updating an existing PR via GitHub CLI (`gh pr edit`), automatically apply the generated description.
 >    - Never leave the user without a comprehensive description to copy-paste or submit when code is pushed to a branch.
 >
-> 7. **Mandatory F-Droid In-Flight MR Maintenance Protocol (Until MR !48556 is Merged)**:
->    F-Droid inclusion MR [!48556](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48556) is currently pending review/testing in F-Droid's queue.
->    Maintainer instruction: *"This MR is mostly ready. We'll test it later. If everything works well we'll merge it. Meantime if you release a new version please update this MR."*
->    - **CRITICAL**: Whenever a new app version is released upstream while MR !48556 is still open, **YOU MUST UPDATE `fdroiddata` (`metadata/com.tu.expense.manager.yml`)**.
->    - Ensure split APK version codes (`<buildNumber>1`, `<buildNumber>2`, `<buildNumber>3`) are added.
->    - Ensure `autoCheckEnabled()` remains `false` by default.
->    - Ensure runtime F-Droid intent (`fdroidrepo://`, `fdroidapp://`) and package/store detection continues to suppress update checks and displays *"Updates managed externally"*.
->    - Ensure Fastlane metadata descriptions use HTML (never Markdown).
->    - Verify reproducible build via Docker (`fdroid build --stop --flavor split com.tu.expense.manager:<versionCode>`).
->    - **P1 GATING STEP**: Before running `git push origin master` in `/Users/jay/Documents/projects/fdroiddata`, **ASK FOR EXPLICIT MANUAL USER APPROVAL**. Push to GitLab only after the user approves.
+> 7. **Official F-Droid Inclusion & Tag-Based Automated Updates (MR !48556 Merged)**:
+>    TU Expense Tracker is officially merged into F-Droid (`fdroid/fdroiddata:master`, package ID: `com.tu.expense.manager`).
+>    - **No Manual GitLab MR Updates**: Upstream releases are tracked automatically via F-Droid's `checkupdates` engine (`AutoUpdateMode: Version v%v`, `UpdateCheckMode: Tags`). Pushing a git tag (`vX.Y.Z`) is all that is required for F-Droid to automatically package and distribute new versions.
+>    - **Split APK Version Codes Invariant**: Keep `version: X.Y.Z+<buildNumber>` in `pubspec.yaml` formatted so the build numbers correctly produce `<buildNumber>1` (`x86_64`), `<buildNumber>2` (`armeabi-v7a`), and `<buildNumber>3` (`arm64-v8a`).
+>    - **In-App Updater Auto-Check Invariant**: `UpdatePrefs.autoCheckEnabled()` MUST remain `false` by default on clean installs.
+>    - **Runtime F-Droid Store Detection**: Preserve intent checks (`fdroidrepo://`, `fdroidapp://`) and installer checks (`isFdroidStore()`) so the in-app updater is completely suppressed on F-Droid installs.
+>    - **Fastlane Metadata & Assets**: Ensure `fastlane/metadata/android/en-US/full_description.txt` uses valid HTML (`<b>`, `<p>`, `<ul>`, `<li>`), never Markdown.
+>    - **GitHub Release Asset Parity**: Pinned Flutter version and split APK filenames (`app-arm64-v8a-release.apk`, `app-armeabi-v7a-release.apk`, `app-x86_64-release.apk`) in `.github/workflows/release.yml` must remain intact to ensure bit-for-bit reproducible build verification passes on F-Droid build servers.
 
 ---
 
@@ -337,30 +335,35 @@ The app features a full-screen `CompareMonthsScreen` that displays a side-by-sid
 
 ---
 
-## 11. 📦 F-Droid Release & In-Flight MR Lifecycle Protocol
+## 11. 📦 Official F-Droid Distribution & Automated Tag Updates
 
-F-Droid inclusion Merge Request [!48556](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48556) is actively pending in F-Droid's review queue.
+TU Expense Tracker is officially included in the canonical F-Droid repository ([`com.tu.expense.manager`](https://f-droid.org/packages/com.tu.expense.manager/)) via Merge Request [!48556](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48556), merged into `fdroid/fdroiddata:master` on October 1, 2026.
 
-> [!IMPORTANT]
-> **Maintainer Directive (linsui)**:
-> *"This MR is mostly ready. We'll test it later. If everything works well we'll merge it. Meantime if you release a new version please update this MR."*
->
-> Until MR !48556 is merged into `fdroid/fdroiddata:master`, every upstream release (`vX.Y.Z`) MUST be synced to `metadata/com.tu.expense.manager.yml` in `/Users/jay/Documents/projects/fdroiddata`.
+> [!NOTE]
+> **Automated Updates Enabled**:
+> The package metadata in `fdroiddata` is configured with `AutoUpdateMode: Version v%v` and `UpdateCheckMode: Tags`.
+> **Manual GitLab MR updates to `fdroiddata` are NO LONGER NEEDED.** F-Droid's official `checkupdates` bot automatically detects upstream Git tags (`vX.Y.Z`) on GitHub, calculates the split APK version codes, and generates the build recipes automatically.
 
-### Upstream Release Checklist & F-Droid Invariants
+### Upstream Release Checklist & Invariants
+Whenever cutting a new release (`vX.Y.Z`) upstream in `expense_manager`:
 1. **Split APK Version Codes**:
-   - `pubspec.yaml` specifies `version: X.Y.Z+<buildNumber>`.
-   - Resulting split APK codes are `<buildNumber>1` (`x86_64`), `<buildNumber>2` (`armeabi-v7a`), `<buildNumber>3` (`arm64-v8a`).
+   - In `pubspec.yaml`, set `version: X.Y.Z+<buildNumber>`.
+   - The Flutter Gradle build generates three split APKs with the following version codes:
+     - `x86_64`: `<buildNumber>1`
+     - `armeabi-v7a`: `<buildNumber>2`
+     - `arm64-v8a`: `<buildNumber>3`
+   - *Example for v2.5.6 (`2.5.6+34`): codes are `341`, `342`, `343`.*
 2. **In-App Updater Safeguards**:
-   - `UpdatePrefs.autoCheckEnabled()` must default to `false`.
-   - `MainActivity.kt` and `update_service.dart` must detect F-Droid intents (`fdroidrepo://`, `fdroidapp://`) and client packages, suppressing update checks when present.
-3. **Reproducible Builds**:
-   - Release workflow pins Flutter in `.github/workflows/release.yml`.
-   - Commit hash in `metadata/com.tu.expense.manager.yml` must be the full 40-character SHA of the release commit on `main`.
-   - Test reproducible build with Docker:
-     ```bash
-     docker run --rm -v /Users/jay/Documents/projects/fdroiddata:/repo -w /repo registry.gitlab.com/fdroid/docker-executable:latest fdroid build --stop --flavor split com.tu.expense.manager:<versionCode>
-     ```
-4. **GitLab Sync**:
-   - Commit and push to `master` branch in `/Users/jay/Documents/projects/fdroiddata` to update MR !48556.
-   - Verify GitLab CI pipeline passes 100%.
+   - `UpdatePrefs.autoCheckEnabled()` MUST remain `false` by default on clean installs.
+   - `MainActivity.kt` and `update_service.dart` detect F-Droid intents (`fdroidrepo://`, `fdroidapp://`) and client packages, suppressing in-app update checks and showing *"Updates managed externally"* in Settings.
+3. **Reproducible Builds & CI Asset Parity**:
+   - Pinned Flutter version in `.github/workflows/release.yml` must match F-Droid's expectations.
+   - Release workflow must publish assets with standard split names:
+     - `app-arm64-v8a-release.apk`
+     - `app-armeabi-v7a-release.apk`
+     - `app-x86_64-release.apk`
+4. **Publishing Workflow**:
+   - Merge the release PR into `main`.
+   - Tag the release: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+   - GitHub Actions automatically builds and publishes the release.
+   - F-Droid's scheduled bot picks up the tag and builds the update automatically within 24–48 hours.
