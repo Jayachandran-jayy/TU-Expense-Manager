@@ -10,6 +10,12 @@
 </p>
 
 <p align="center">
+  <a href="https://f-droid.org/packages/com.tu.expense.manager/">
+    <img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="60" />
+  </a>
+</p>
+
+<p align="center">
   <a href="#-overview-what-is-tu-expense-tracker">Overview</a> •
   <a href="#-key-features">Key Features</a> •
   <a href="#-visual-tour">Visual Tour</a> •
@@ -146,8 +152,13 @@ Follow these simple steps to install the app on your Android phone:
 ---
 
 ### Step 1: Download the App
+
+#### Option A (Recommended): Install via F-Droid
+Install directly via the official [F-Droid Catalog](https://f-droid.org/packages/com.tu.expense.manager/) or through F-Droid client apps (F-Droid, Droid-ify, Neo Store). Updates are managed automatically.
+
+#### Option B: Direct APK Download (GitHub Releases)
 1. Go to the [Releases](https://github.com/Jayachandran-jayy/TU-Expense-Manager/releases) page.
-2. Tap on the latest file ending in **`.apk`** (for example: `tu-expense-tracker.apk`) to start downloading.
+2. Download the split `.apk` for your device architecture (most modern phones use `app-arm64-v8a-release.apk`, or download `app-release.apk` for the universal installer).
 3. If your web browser shows a message saying *"File might be harmful"*, tap **Download anyway**.
 
 ---
