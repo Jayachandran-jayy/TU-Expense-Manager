@@ -46,7 +46,6 @@ export 'src/mobile/sync_client.dart';
 export 'src/mobile/sync_prefs.dart';
 export 'src/mobile/update_service.dart';
 export 'src/mobile/widgets/server_backups_sheet.dart';
-export 'src/mobile/widgets/settings_header.dart';
 export 'src/ui_shared/connection_dot.dart';
 export 'src/ui_shared/dashboard_tab.dart';
 export 'src/ui_shared/formats.dart';

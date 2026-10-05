@@ -73,6 +73,11 @@ const List<String> kCuratedCategoryEmojis = <String>[
   '👨', '🥛', '💄', '🥗', '🥦', '🥕', '🍪', '🪙', '🐖',
 ];
 
+// ponytail: Heuristic keyword cascade for unseeded category names. Emoji mappings
+// and vector icon glyphs intentionally diverge in specific categories (e.g. meat/fish,
+// income priority, shop fallbacks). If keyword sets grow further, migrate both to
+// a shared category descriptor registry.
+
 /// Smart emoji suggestions for any category name based on keyword matches.
 String suggestCategoryEmoji(String category) {
   final String key = category.trim().toLowerCase();

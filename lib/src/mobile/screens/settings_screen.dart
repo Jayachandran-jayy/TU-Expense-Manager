@@ -26,7 +26,7 @@ import '../sync_client.dart';
 import '../sync_prefs.dart';
 import '../update_service.dart';
 import '../widgets/server_backups_sheet.dart';
-import '../widgets/settings_header.dart';
+import '../../ui_shared/shared_controls.dart';
 import 'categories_screen.dart';
 import 'merchant_defaults_screen.dart';
 import 'merge_names_screen.dart';
