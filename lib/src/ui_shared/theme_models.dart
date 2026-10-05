@@ -26,13 +26,10 @@ enum AppThemeMode {
       };
 
   /// Parses a serialized name or returns [AppThemeMode.system] as fallback.
-  static AppThemeMode fromName(String? name) {
-    if (name == null) return AppThemeMode.system;
-    for (final mode in AppThemeMode.values) {
-      if (mode.name.toLowerCase() == name.toLowerCase()) return mode;
-    }
-    return AppThemeMode.system;
-  }
+  static AppThemeMode fromName(String? name) => AppThemeMode.values.firstWhere(
+        (mode) => mode.name.toLowerCase() == name?.toLowerCase(),
+        orElse: () => AppThemeMode.system,
+      );
 }
 
 /// The available accent color seeds.
@@ -52,13 +49,11 @@ enum AppAccentColor {
   final Color seedColor;
 
   /// Parses a serialized name or returns [AppAccentColor.blue] as fallback.
-  static AppAccentColor fromName(String? name) {
-    if (name == null) return AppAccentColor.blue;
-    for (final accent in AppAccentColor.values) {
-      if (accent.name.toLowerCase() == name.toLowerCase()) return accent;
-    }
-    return AppAccentColor.blue;
-  }
+  static AppAccentColor fromName(String? name) =>
+      AppAccentColor.values.firstWhere(
+        (accent) => accent.name.toLowerCase() == name?.toLowerCase(),
+        orElse: () => AppAccentColor.blue,
+      );
 }
 
 /// The icon rendering pack used for category badges across the app.
@@ -74,12 +69,9 @@ enum AppIconPack {
   final IconData icon;
 
   /// Parses a serialized name or returns [AppIconPack.emojis] as fallback.
-  static AppIconPack fromName(String? name) {
-    if (name == null) return AppIconPack.emojis;
-    for (final pack in AppIconPack.values) {
-      if (pack.name.toLowerCase() == name.toLowerCase()) return pack;
-    }
-    return AppIconPack.emojis;
-  }
+  static AppIconPack fromName(String? name) => AppIconPack.values.firstWhere(
+        (pack) => pack.name.toLowerCase() == name?.toLowerCase(),
+        orElse: () => AppIconPack.emojis,
+      );
 }
 

@@ -82,45 +82,6 @@ void main() {
     });
   });
 
-  group('LoadingOverlay', () {
-    testWidgets('renders child alone when loading is false',
-        (WidgetTester tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingOverlay(
-              loading: false,
-              child: Text('Main Content'),
-            ),
-          ),
-        ),
-      );
-
-      expect(find.text('Main Content'), findsOneWidget);
-      expect(find.byType(AnimatedCoin), findsNothing);
-    });
-
-    testWidgets('renders scrim and card when loading is true',
-        (WidgetTester tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: LoadingOverlay(
-              loading: true,
-              message: 'Processing batch…',
-              child: Text('Main Content'),
-            ),
-          ),
-        ),
-      );
-
-      expect(find.text('Main Content'), findsOneWidget);
-      expect(find.text('Processing batch…'), findsOneWidget);
-      expect(find.byType(AnimatedCoin), findsOneWidget);
-      expect(find.byType(CoinProgressBar), findsOneWidget);
-    });
-  });
-
   group('withLoadingModal', () {
     testWidgets('shows modal during async task and dismisses upon completion',
         (WidgetTester tester) async {

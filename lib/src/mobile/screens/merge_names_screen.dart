@@ -9,8 +9,8 @@ import 'package:flutter/material.dart';
 import '../../core/aliases.dart';
 import '../../core/models.dart';
 import '../../ui_shared/loading_dialog.dart';
+import '../../ui_shared/shared_controls.dart';
 import '../database.dart';
-import '../widgets/settings_header.dart';
 import '../widgets/undo_toast.dart';
 
 /// Folds several labels for one real card, account or merchant into one name.
