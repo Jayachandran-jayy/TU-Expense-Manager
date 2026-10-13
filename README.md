@@ -61,7 +61,15 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 - **Safe & Idempotent**: Multi-layer deduplication prevents double-counting, even if bank alerts are received multiple times or rescanned.
 - **Accurate Clock Time Extraction**: Accurately extracts explicit transaction clock times from diverse SMS timestamp formats (including ISO, commas, dots, `at`, and month-first names). When SMS bodies contain only a calendar date, the parser borrows the message arrival time (or defaults to midnight for manual paste) rather than zeroing timestamps.
 
-### 4. ✉️ Email Transaction Support (Gmail IMAP & Manual Paste)
+### 4. 🧠 On-Device AI SMS Parser & Fallback (Optional & 100% Offline)
+For unformatted or non-standard SMS messages where deterministic regex patterns fail, TU Expense Tracker includes an optional, privacy-respecting on-device AI assistant powered by `llama.cpp` and Qwen 2.5 (0.5B Instruct):
+- **100% Offline & Private**: Runs directly on your device CPU. No API keys, no internet connection required for parsing, and zero financial telemetry leaves your phone.
+- **Zero APK Bloat (F-Droid Compliant)**: Model weights are never bundled into the APK to keep the app lightweight (~25 MB). Download the model (~469 MB) on-demand in Settings or import any custom GGUF model from device storage.
+- **Background Fallback**: When enabled in Settings, the AI automatically steps in when regular regex parsing fails during SMS scans.
+- **Interactive Parsing from Inbox**: In the **Unadded SMS** inbox, tap the ✨ **Parse with on-device AI** button on any message to parse it and prefill `AddTransactionScreen` for instant review.
+- **In-App Testing & Management**: Test any sample SMS text directly inside Settings to view extracted amount, merchant, direction (debit/credit), and instrument in real time. Manage model storage or delete downloaded weights anytime.
+
+### 5. ✉️ Email Transaction Support (Gmail IMAP & Manual Paste)
 Missing bank SMS alerts due to carrier network drops or telecom delivery issues? TU Expense Tracker bridges the gap with comprehensive email support:
 - **Direct Gmail Connect**: Connect via secure IMAP TLS (`imap.gmail.com:993`) using a standard 16-character Google App Password — no complicated Cloud Console OAuth setup required.
 - **Smart Pre-Filtering**: Scans transaction emails across 7, 14, or 30 days lookback ranges using targeted keyword matching (`debited`, `spent`, `credited`, `received`, `card`, `a/c`).
@@ -71,7 +79,7 @@ Missing bank SMS alerts due to carrier network drops or telecom delivery issues?
 - **Ledger Deduplication Badges**: Emails matching transactions already recorded in your ledger display an `Added` badge to prevent duplicate charges.
 - **Dismiss & Hide**: Dismiss irrelevant notification emails with a single tap.
 
-### 5. 📊 Visual Spending Dashboard & Monthly Reports
+### 6. 📊 Visual Spending Dashboard & Monthly Reports
 
 - **Interactive charts**: View category breakdowns as pie charts or horizontal bars.
 - **Trend analysis**: Line charts showing daily spend pace compared to previous months.
@@ -81,22 +89,22 @@ Missing bank SMS alerts due to carrier network drops or telecom delivery issues?
 - **Single-Month Donut Chart**: Clear breakdown of where your money went, ranked by category share with exact amounts.
 - **Multi-Month Comparison Bars**: Compare 2 to 6 months side-by-side to understand spending trends over time.
 
-### 6. 🔍 Fast Search & Interlinked Smart Filters
+### 7. 🔍 Fast Search & Interlinked Smart Filters
 - **Instant Search**: Search notes and merchant names across your entire ledger with zero lag.
 - **Interlinked Facets**: Filter by Month, Category, Merchant, or Card/Account. Filters dynamically constrain each other so you never hit a dead end.
 - **Active Filter Chips**: See all active filters as removable token chips with a single-click **Clear all** button.
 
-### 7. 🔗 Duplicate Cleaner & Name Merging
+### 8. 🔗 Duplicate Cleaner & Name Merging
 Banks often send inconsistent names for the exact same account or shop (e.g., `HDFC Bank A/C *0444`, `BANK A/c XX0444`, or `UPI_SWIGGY`).
 - **Merge Merchants & Accounts**: Combine multiple variations into a single clean display name under **Settings › Cleanup**.
 - **Non-Destructive & Undoable**: Merging only changes the display layer — original bank labels and raw data are never corrupted.
 
-### 8. 🎨 Themes, Pitch Black OLED & Emoji Icon Packs
+### 9. 🎨 Themes, Pitch Black OLED & Emoji Icon Packs
 - **OLED Pitch Black**: True `#000000` pixel shut-off for AMOLED displays to maximize battery life.
 - **8 Curated Accent Colors**: Classic Blue, Crimson Red, Emerald Green, Royal Purple, Sunset Orange, Rose Pink, Teal/Cyan, and Cyber Amber.
 - **Icon Packs & Smart Emoji Avatars**: Choose between Vibrant Emojis (WhatsApp/Fluent style), Clean Minimalist Outlines, or Modern Filled icons with smart keyword auto-matching.
 
-### 9. 💾 Human-Readable Excel Backup & Optional Web Sync
+### 10. 💾 Human-Readable Excel Backup & Optional Web Sync
 - **1-Click Spreadsheet Backup**: Export your entire financial history to a standard `.xlsx` workbook viewable directly in Google Sheets or Excel. Restore with full database validation anytime.
 - **Optional Self-Hosted Web Client**: Spin up the lightweight Docker backend to view your ledger on desktop web browsers and queue edits across your private home network.
 
@@ -140,6 +148,16 @@ Banks often send inconsistent names for the exact same account or shop (e.g., `H
         <img src="docs/screenshots/undo_toast.png" alt="Floating UndoToast Notification" width="100%" />
         <br />
         <strong>⏱️ UndoToast & Timed Dismiss</strong>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" width="50%">
+        <img src="docs/screenshots/ai_parser.png" alt="On-Device AI SMS Parser" width="100%" />
+        <br />
+        <strong>🧠 On-Device AI SMS Parser & Tester</strong>
+      </td>
+      <td align="center" width="50%">
+        <!-- Empty cell for balanced grid layout -->
       </td>
     </tr>
   </table>

@@ -54,6 +54,7 @@ dependencies:
   share_plus: ^13.3.0         # To hand the workbook to Drive, Gmail or Files
   file_picker: ^12.0.0        # To pick a backup back off the device for restore
   enough_mail: ^2.1.6        # To connect to Gmail IMAP for transaction emails
+  llama_flutter_android: ^0.2.6 # On-device LLM inference for transactional SMS parsing
 
 dev_dependencies:
   flutter_test:
