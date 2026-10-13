@@ -66,8 +66,11 @@ For unformatted or non-standard SMS messages where deterministic regex patterns 
 - **100% Offline & Private**: Runs directly on your device CPU. No API keys, no internet connection required for parsing, and zero financial telemetry leaves your phone.
 - **Zero APK Bloat (F-Droid Compliant)**: Model weights are never bundled into the APK to keep the app lightweight (~25 MB). Download the model (~469 MB) on-demand in Settings or import any custom GGUF model from device storage.
 - **Background Fallback**: When enabled in Settings, the AI automatically steps in when regular regex parsing fails during SMS scans.
+- **Scan Existing SMS for Review (`ScanReviewScreen`)**: Run a full inbox and unadded SMS scan on demand using both regex and on-device AI. Found transactions are presented in an interactive review checklist where you can toggle candidates, inspect raw SMS bodies, see cumulative totals, and batch-add them with one tap.
+- **Unified Paste Transaction Dialog (`PasteTransactionDialog`)**: Directly paste any bank SMS or email notification text from your clipboard. The system cascades through SMS patterns, email templates, and on-device AI to extract details and opens `AddTransactionScreen` pre-filled for rapid confirmation.
+- **✨ AI Quick Actions Sheet**: Quickly accessible via the ✨ icon in the Transactions toolbar whenever AI is available, giving instant access to Scan Existing SMS and Paste Transaction tools.
 - **Interactive Parsing from Inbox**: In the **Unadded SMS** inbox, tap the ✨ **Parse with on-device AI** button on any message to parse it and prefill `AddTransactionScreen` for instant review.
-- **In-App Testing & Management**: Test any sample SMS text directly inside Settings to view extracted amount, merchant, direction (debit/credit), and instrument in real time. Manage model storage or delete downloaded weights anytime.
+- **In-App Management**: Download the Qwen 2.5 model with live progress or import your own GGUF weights, inspect storage usage, and toggle fallback anytime in Settings.
 
 ### 5. ✉️ Email Transaction Support (Gmail IMAP & Manual Paste)
 Missing bank SMS alerts due to carrier network drops or telecom delivery issues? TU Expense Tracker bridges the gap with comprehensive email support:
@@ -75,7 +78,7 @@ Missing bank SMS alerts due to carrier network drops or telecom delivery issues?
 - **Smart Pre-Filtering**: Scans transaction emails across 7, 14, or 30 days lookback ranges using targeted keyword matching (`debited`, `spent`, `credited`, `received`, `card`, `a/c`).
 - **Selective Manual Verification (No Bulk Auto-Add)**: Browse emails in an intuitive list, search in real-time, and review parsed details in `AddTransactionScreen` before saving to your ledger.
 - **Precise Timing Preservation**: Extracts explicit transaction times from all major issuer email alerts (HDFC, ICICI, SBI, Axis, Yes, Kotak, IndusInd), and borrows the email message arrival timestamp when explicit times are absent, avoiding arbitrary 12:00 AM defaults.
-- **Quick Paste Dialog**: Copy email transaction text directly from any mail app and paste it into the quick paste dialog for instant regex extraction.
+- **Unified Paste Support**: Copy bank or credit card transaction alert emails directly from your mail app and paste them into the unified paste dialog for instant extraction and verification.
 - **Ledger Deduplication Badges**: Emails matching transactions already recorded in your ledger display an `Added` badge to prevent duplicate charges.
 - **Dismiss & Hide**: Dismiss irrelevant notification emails with a single tap.
 

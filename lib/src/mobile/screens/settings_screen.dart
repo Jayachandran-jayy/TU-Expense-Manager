@@ -28,11 +28,15 @@ import '../services/local_llm_service.dart';
 import '../sync_client.dart';
 import '../sync_prefs.dart';
 import '../update_service.dart';
+import '../../core/parser.dart';
+import '../sms_source.dart';
+import '../widgets/paste_transaction_dialog.dart';
 import '../widgets/server_backups_sheet.dart';
 import '../../ui_shared/shared_controls.dart';
 import 'categories_screen.dart';
 import 'merchant_defaults_screen.dart';
 import 'merge_names_screen.dart';
+import 'scan_review_screen.dart';
 import 'update_dialog.dart';
 
 /// The second destination. A body only — the shell it sits in supplies the
@@ -336,101 +340,120 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _testAiModel() async {
-    final textController = TextEditingController(
-      text: 'Sent Rs.90.00 from A/c *4668 on 12-10-26 to M/S.RAJALAKSHMI EDUCATION SERV. RRN 316719288101.',
+  Future<void> _openPasteTransaction() async {
+    await showPasteTransactionDialog(
+      context,
+      database: AppDatabase.instance,
+      onTransactionAdded: widget.onChanged,
     );
+  }
 
-    final String? smsToTest = await showDialog<String>(
+  Future<void> _scanExistingSmsForReview() async {
+    final bool aiAvailable =
+        await LocalLlmService.instance.isModelAvailable();
+    if (!mounted) return;
+
+    final candidates = <CandidateTransaction>[];
+    final db = AppDatabase.instance;
+    final sms = SmsSource();
+
+    await withLoadingModal<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Test On-Device AI'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Enter or paste any bank SMS to test on-device parsing:'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Paste SMS body here...',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, textController.text.trim()),
-            child: const Text('Parse with AI'),
-          ),
-        ],
-      ),
+      message: 'Scanning SMS for transactions…',
+      subtitle: aiAvailable
+          ? 'Evaluating via patterns & on-device AI'
+          : 'Evaluating via patterns',
+      task: () async {
+        final seenKeys = <String>{};
+
+        // 1. Gather unadded SMS
+        final unaddedList = await db.unaddedSms();
+        for (final msg in unaddedList) {
+          ParsedSms? parsed =
+              SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
+          if (parsed == null && aiAvailable) {
+            try {
+              parsed = await LocalLlmService.instance.parseSms(
+                msg.body,
+                receivedAt: msg.receivedAt,
+              );
+            } catch (_) {}
+          }
+          if (parsed != null) {
+            final isDup = await db.isDuplicateOrDeleted(parsed);
+            final key =
+                '${parsed.amount}|${parsed.merchant.toLowerCase()}|${parsed.date.millisecondsSinceEpoch}|${parsed.direction.name}|${parsed.reference}';
+            if (!isDup && !seenKeys.contains(key)) {
+              seenKeys.add(key);
+              candidates.add(
+                CandidateTransaction(
+                  parsed: parsed,
+                  rawBody: msg.body,
+                  unaddedSmsId: msg.id,
+                  selected: true,
+                ),
+              );
+            }
+          }
+        }
+
+        // 2. Gather telephony inbox if supported
+        if (sms.isSupported) {
+          final hasPerm = await sms.requestPermission();
+          if (hasPerm) {
+            final inbox = await sms.readInbox();
+            for (final msg in inbox) {
+              ParsedSms? parsed =
+                  SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
+              if (parsed == null && aiAvailable) {
+                try {
+                  parsed = await LocalLlmService.instance.parseSms(
+                    msg.body,
+                    receivedAt: msg.receivedAt,
+                  );
+                } catch (_) {}
+              }
+              if (parsed != null) {
+                final isDup = await db.isDuplicateOrDeleted(parsed);
+                final key =
+                    '${parsed.amount}|${parsed.merchant.toLowerCase()}|${parsed.date.millisecondsSinceEpoch}|${parsed.direction.name}|${parsed.reference}';
+                if (!isDup && !seenKeys.contains(key)) {
+                  seenKeys.add(key);
+                  candidates.add(
+                    CandidateTransaction(
+                      parsed: parsed,
+                      rawBody: msg.body,
+                      selected: true,
+                    ),
+                  );
+                }
+              }
+            }
+          }
+        }
+      },
     );
 
-    if (smsToTest == null || smsToTest.isEmpty || !mounted) return;
+    if (!mounted) return;
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 20),
-            Text('Running on-device AI...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final parsed = await LocalLlmService.instance.parseSms(smsToTest);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('AI Extraction Result'),
-          content: Text(
-            parsed != null
-                ? '• Amount: ₹${parsed.amount.toStringAsFixed(2)}\n'
-                  '• Type: ${parsed.direction.name.toUpperCase()}\n'
-                  '• Merchant: ${parsed.merchant}\n'
-                  '• Payment: ${parsed.paymentType}\n'
-                  '• Reference: ${parsed.reference.isNotEmpty ? parsed.reference : "None"}\n'
-                  '• Date: ${parsed.date.toIso8601String().split("T").first}'
-                : 'Could not extract transaction details from this SMS.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-          ],
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No new transactions found in existing SMS.'),
         ),
       );
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('AI Test Error'),
-          content: Text(e.toString()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
+      return;
     }
+
+    await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
+        builder: (_) => ScanReviewScreen(
+          candidates: candidates,
+          database: db,
+          onAdded: widget.onChanged,
+        ),
+      ),
+    );
   }
 
   Future<void> _setAutoCheck(bool value) async {
@@ -1084,12 +1107,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Wrap(
                     spacing: 8,
-                    runSpacing: 4,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      ActionChip(
-                        avatar: const Icon(Icons.play_arrow, size: 16),
-                        label: const Text('Test with sample SMS'),
-                        onPressed: _testAiModel,
+                      FilledButton.tonalIcon(
+                        icon: const Icon(Icons.document_scanner, size: 18),
+                        label: const Text('Scan existing SMS'),
+                        onPressed: _scanExistingSmsForReview,
+                      ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.content_paste, size: 18),
+                        label: const Text('Paste transaction'),
+                        onPressed: _openPasteTransaction,
                       ),
                       ActionChip(
                         avatar: const Icon(Icons.delete_outline, size: 16, color: Colors.red),

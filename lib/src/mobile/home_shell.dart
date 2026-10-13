@@ -42,8 +42,11 @@ import 'sms_source.dart';
 import 'sync_client.dart';
 import 'sync_prefs.dart';
 import 'update_service.dart';
+import 'screens/scan_review_screen.dart';
 import 'services/app_lock_service.dart';
+import 'services/local_llm_service.dart';
 import 'widgets/app_lock_wrapper.dart';
+import 'widgets/paste_transaction_dialog.dart';
 import 'widgets/undo_toast.dart';
 
 
@@ -199,6 +202,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   /// Ids marked for deletion. Lives here rather than in the tab because the app
   /// bar it takes over is built here.
   final Set<int> _selected = <int>{};
+  bool _isAiModelAvailable = false;
 
   @override
   void initState() {
@@ -272,12 +276,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       _db.transactions(),
       _db.categories(),
       LedgerPrefs.instance.trackReceived(),
+      LocalLlmService.instance.isModelAvailable(),
     ]);
     if (!mounted) return;
     setState(() {
       _transactions = results[0] as List<ExpenseTxn>;
       _categories = results[1] as List<ExpenseCategory>;
       final trackReceived = results[2] as bool;
+      _isAiModelAvailable = results[3] as bool;
       _filters = _filters.copyWith(includeCredits: trackReceived);
       // An app left open across midnight on the last of the month rolls over
       // here, on the next refresh, scan or return from Settings — deterministic
@@ -512,21 +518,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   // EDITING
   // -------------------------------------------------------------------------
 
-  /// Feeds an arbitrary SMS body through parse -> auto-categorize -> insert.
-  Future<void> _ingest(String body) async {
-    final parsed = SmsParser.parse(body, receivedAt: DateTime.now());
-    if (parsed == null) {
-      _toast('Could not parse that SMS — no template matched.');
-      return;
-    }
-    final id = await _db.insertParsed(parsed);
-    await _load();
-    final verb = parsed.isCredit ? 'Received' : 'Added';
-    _toast(id == 0
-        ? 'Already recorded or deleted: ${parsed.merchant}'
-        : '$verb ${_money.format(parsed.amount)} · ${parsed.merchant}'
-            '${_outOfViewSuffix(parsed.date)}');
-  }
 
   /// Names the month when a row has just been imported into one the list is not
   /// showing.
@@ -939,37 +930,186 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     await showUpdateDialog(context, release);
   }
 
-  Future<void> _addSmsManually() async {
-    final controller = TextEditingController(text: kSampleSms);
-    final body = await showDialog<String>(
+  Future<void> _openPasteTransaction() async {
+    final view = _derive();
+    final customTypes = await _db.paymentMethods();
+    final aliases = await _db.aliases();
+    final resolvedCustom =
+        customTypes.map((pm) => aliases.resolve(NameKind.card, pm));
+    final allTypes =
+        <String>{...view.paymentTypes, ...resolvedCustom}.toList()..sort();
+
+    if (!mounted) return;
+    await showPasteTransactionDialog(
+      context,
+      categories: _categories,
+      merchants: view.merchants,
+      paymentTypes: allTypes,
+      database: _db,
+      onTransactionAdded: _load,
+    );
+  }
+
+  Future<void> _scanExistingSmsForReview() async {
+    final bool aiAvailable =
+        await LocalLlmService.instance.isModelAvailable();
+    if (!mounted) return;
+
+    final candidates = <CandidateTransaction>[];
+
+    await withLoadingModal<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Paste an SMS'),
-        content: TextField(
-          controller: controller,
-          maxLines: 6,
-          minLines: 4,
-          autofocus: true,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            hintText: 'Any Yes Bank / HDFC / ICICI spend or credit alert',
-          ),
+      message: 'Scanning SMS for transactions…',
+      subtitle: aiAvailable
+          ? 'Evaluating via patterns & on-device AI'
+          : 'Evaluating via patterns',
+      task: () async {
+        final seenKeys = <String>{};
+
+        // 1. Gather unadded SMS from database
+        final unaddedList = await _db.unaddedSms();
+        for (final msg in unaddedList) {
+          ParsedSms? parsed =
+              SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
+          if (parsed == null && aiAvailable) {
+            try {
+              parsed = await LocalLlmService.instance.parseSms(
+                msg.body,
+                receivedAt: msg.receivedAt,
+              );
+            } catch (_) {}
+          }
+          if (parsed != null) {
+            final isDup = await _db.isDuplicateOrDeleted(parsed);
+            final key =
+                '${parsed.amount}|${parsed.merchant.toLowerCase()}|${parsed.date.millisecondsSinceEpoch}|${parsed.direction.name}|${parsed.reference}';
+            if (!isDup && !seenKeys.contains(key)) {
+              seenKeys.add(key);
+              candidates.add(
+                CandidateTransaction(
+                  parsed: parsed,
+                  rawBody: msg.body,
+                  unaddedSmsId: msg.id,
+                  selected: true,
+                ),
+              );
+            }
+          }
+        }
+
+        // 2. Gather telephony inbox if supported
+        if (_sms.isSupported) {
+          final hasPerm = await _sms.requestPermission();
+          if (hasPerm) {
+            final inbox = await _sms.readInbox();
+            for (final msg in inbox) {
+              ParsedSms? parsed =
+                  SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
+              if (parsed == null && aiAvailable) {
+                try {
+                  parsed = await LocalLlmService.instance.parseSms(
+                    msg.body,
+                    receivedAt: msg.receivedAt,
+                  );
+                } catch (_) {}
+              }
+              if (parsed != null) {
+                final isDup = await _db.isDuplicateOrDeleted(parsed);
+                final key =
+                    '${parsed.amount}|${parsed.merchant.toLowerCase()}|${parsed.date.millisecondsSinceEpoch}|${parsed.direction.name}|${parsed.reference}';
+                if (!isDup && !seenKeys.contains(key)) {
+                  seenKeys.add(key);
+                  candidates.add(
+                    CandidateTransaction(
+                      parsed: parsed,
+                      rawBody: msg.body,
+                      selected: true,
+                    ),
+                  );
+                }
+              }
+            }
+          }
+        }
+      },
+    );
+
+    if (!mounted) return;
+
+    if (candidates.isEmpty) {
+      _toast('No new transactions found in existing SMS.');
+      return;
+    }
+
+    await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
+        builder: (_) => ScanReviewScreen(
+          candidates: candidates,
+          database: _db,
+          onAdded: _load,
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Parse'),
-          ),
-        ],
       ),
     );
-    if (body != null && body.trim().isNotEmpty) {
-      await _ingest(body);
-    }
+  }
+
+  Future<void> _openAiToolsSheet() async {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.auto_awesome, color: colorScheme.primary),
+                    const SizedBox(width: 12),
+                    Text(
+                      'On-Device AI Tools',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.document_scanner_outlined),
+                title: const Text('Scan SMS for review'),
+                subtitle: const Text(
+                  'Scan existing messages to find and select transactions',
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _scanExistingSmsForReview();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.content_paste_outlined),
+                title: const Text('Paste SMS or Email'),
+                subtitle: const Text(
+                  'Paste text from bank alerts to extract details automatically',
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openPasteTransaction();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _openAddTransaction() async {
@@ -1105,6 +1245,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           onPressed: _openEmailTransactions,
           icon: const Icon(Icons.mail_outline),
         ),
+        if (_isAiModelAvailable)
+          IconButton(
+            tooltip: 'AI tools',
+            onPressed: _openAiToolsSheet,
+            icon: const Icon(Icons.auto_awesome),
+          ),
         _inboxAction(),
         if (_scanning)
           const Center(
@@ -1129,7 +1275,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               case 'email_transactions':
                 _openEmailTransactions();
               case 'paste_sms':
-                _addSmsManually();
+              case 'paste_transaction':
+                _openPasteTransaction();
               case 'rescan':
                 _scanFromToolbar(full: true);
               case 'deleted':
@@ -1142,8 +1289,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               child: Text('Email transactions'),
             ),
             PopupMenuItem<String>(
-              value: 'paste_sms',
-              child: Text('Paste SMS'),
+              value: 'paste_transaction',
+              child: Text('Paste transaction'),
             ),
             PopupMenuItem<String>(
               value: 'deleted',
