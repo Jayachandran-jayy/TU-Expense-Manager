@@ -55,6 +55,7 @@ dependencies:
   file_picker: ^12.0.0        # To pick a backup back off the device for restore
   enough_mail: ^2.1.6        # To connect to Gmail IMAP for transaction emails
   llama_flutter_android: ^0.2.6 # On-device LLM inference for transactional SMS parsing
+  local_auth: ^2.3.0          # Biometric and screen lock credential authentication
 
 dev_dependencies:
   flutter_test:

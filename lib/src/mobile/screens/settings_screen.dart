@@ -23,6 +23,7 @@ import '../backup_dialogs.dart';
 import '../backup_files.dart';
 import '../connection_monitor.dart';
 import '../database.dart';
+import '../services/app_lock_service.dart';
 import '../services/local_llm_service.dart';
 import '../sync_client.dart';
 import '../sync_prefs.dart';
@@ -62,6 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   DateTime? _lastChecked;
   bool _loading = true;
   bool _checking = false;
+  bool _appLock = false;
   bool _trackReceived = false;
   bool _aiFallback = false;
   bool _isAiModelAvailable = false;
@@ -120,6 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bool autoAfterScan = await sync.autoAfterScan();
     final bool autoSync = await sync.auto();
     final int autoMinutes = await sync.autoMinutes();
+    final bool appLock = await LedgerPrefs.instance.appLockEnabled();
     final bool trackReceived = await LedgerPrefs.instance.trackReceived();
     final bool aiFallback = await LedgerPrefs.instance.aiFallbackEnabled();
     final bool isAiAvailable = await LocalLlmService.instance.isModelAvailable();
@@ -140,12 +143,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _autoAfterScan = autoAfterScan;
       _auto = autoSync;
       _autoMinutes = autoMinutes;
+      _appLock = appLock;
       _trackReceived = trackReceived;
       _aiFallback = aiFallback;
       _isAiModelAvailable = isAiAvailable;
       _aiModelSizeBytes = aiSizeBytes;
       _loading = false;
     });
+  }
+
+  Future<void> _setAppLock(bool value) async {
+    if (value) {
+      final bool canAuth = await AppLockService.instance.canAuthenticate();
+      if (!canAuth) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Biometrics or device screen lock (PIN/pattern) is not set up on this device.',
+            ),
+          ),
+        );
+        return;
+      }
+      final bool success = await AppLockService.instance.authenticate(
+        localizedReason:
+            'Authenticate with biometrics or screen lock to enable App Lock.',
+      );
+      if (!success) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Authentication cancelled or failed.')),
+        );
+        return;
+      }
+      setState(() => _appLock = true);
+      await LedgerPrefs.instance.setAppLockEnabled(true);
+      await AppLockService.instance.updateSecureFlag(true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('App Lock enabled.')),
+      );
+    } else {
+      final bool success = await AppLockService.instance.authenticate(
+        localizedReason: 'Authenticate to disable App Lock.',
+      );
+      if (!success) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Authentication required to disable App Lock.'),
+          ),
+        );
+        return;
+      }
+      setState(() => _appLock = false);
+      await LedgerPrefs.instance.setAppLockEnabled(false);
+      await AppLockService.instance.updateSecureFlag(false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('App Lock disabled.')),
+      );
+    }
   }
 
   Future<void> _setTrackReceived(bool value) async {
@@ -960,6 +1019,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const Divider(height: 32),
               SettingsHeader('Preferences'),
+              SwitchListTile(
+                value: _appLock,
+                onChanged: _setAppLock,
+                title: const Text('App lock'),
+                subtitle: const Text(
+                  'Require fingerprint, face, or device screen lock to open the app. Off by default.',
+                ),
+              ),
+              const Divider(height: 16),
               SwitchListTile(
                 value: _trackReceived,
                 onChanged: _setTrackReceived,

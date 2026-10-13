@@ -139,6 +139,16 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
   - **Prompt Engineering & Direction Disambiguation**: Custom system instructions explicitly disambiguate debit vs credit ("type: debit if sent, spent, debited, paid, withdrawn, or transferred out; credit if received, credited, deposited, or refunded") to guarantee 100% direction fidelity even on tricky formats like Indian Bank ("Sent Rs.90 to M/S...").
   - **Settings Management & Interactive Tester**: Settings screen provides an on/off toggle, live download progress bar with cancelation, model storage badge with deletion, and an interactive test dialog allowing live testing against arbitrary SMS texts.
   - **CI & Test Suite Safety**: Platform checks (`Platform.isAndroid`) and `getActiveModelPath()` guard against invoking native `llama.cpp` bindings during non-Android execution. Unit tests (`test/local_llm_service_test.dart`) test prompt generation, JSON extraction, and state management in milliseconds without requiring native binaries or weight downloads.
+- **On-Device App Lock & Privacy Subsystem (`lib/src/mobile/services/app_lock_service.dart`, `AppLockWrapper`, `AppLockScreen`, `local_auth`)**:
+  - **Biometrics & Device Screen Lock Fallback**: Leverages `local_auth: ^2.3.0` (`biometricOnly: false`) to authenticate via fingerprint, face recognition, or native screen lock credentials (PIN/pattern/password).
+  - **FragmentActivity Requirement**: Android `MainActivity.kt` extends `FlutterFragmentActivity` to host `BiometricPrompt` safely without platform exceptions.
+  - **Preferences & Defaults**: Managed via `LedgerPrefs.appLockEnabled()` and `setAppLockEnabled()`, **OFF by default**.
+  - **Tamper & Lockout Safeguards**:
+    - **Activation Safeguard**: Toggling ON in `SettingsScreen` requires an immediate successful authentication test before committing to storage, preventing lockouts if device security is misconfigured.
+    - **Deactivation Safeguard**: Toggling OFF in `SettingsScreen` prompts for authentication before disabling.
+  - **Lifecycle Lock Rules (`AppLockWrapper`)**: Intercepts `didChangeAppLifecycleState`. Triggers `_service.checkAndLock()` strictly on `AppLifecycleState.paused` when `!_service.isAuthenticating`. Inactive states (which occur when the OS biometric/PIN sheet itself is visible) are ignored to avoid re-locking loops.
+  - **Window Privacy Protection (`FLAG_SECURE`)**: `MainActivity.kt` handles the `setSecureFlag` method channel to set or clear `WindowManager.LayoutParams.FLAG_SECURE`. When App Lock is enabled, the app window is protected from screenshots and masked in Android's recent apps switcher.
+  - **Clean Barrier UI (`AppLockScreen`)**: Displays a full-screen theme-aware barrier with the TU Expense Tracker logo, lock message, and an explicit "Unlock with Biometrics / PIN" button for retry if the initial prompt is dismissed.
 
 ---
 

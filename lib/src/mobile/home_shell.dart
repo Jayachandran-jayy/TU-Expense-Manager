@@ -42,6 +42,8 @@ import 'sms_source.dart';
 import 'sync_client.dart';
 import 'sync_prefs.dart';
 import 'update_service.dart';
+import 'services/app_lock_service.dart';
+import 'widgets/app_lock_wrapper.dart';
 import 'widgets/undo_toast.dart';
 
 
@@ -51,11 +53,13 @@ class TuExpenseTrackerApp extends StatelessWidget {
     this.database,
     this.smsSource,
     this.themeController,
+    this.appLockService,
   });
 
   final AppDatabase? database;
   final SmsSource? smsSource;
   final ThemeController? themeController;
+  final AppLockService? appLockService;
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +73,10 @@ class TuExpenseTrackerApp extends StatelessWidget {
           theme: controller.lightTheme,
           darkTheme: controller.darkTheme,
           themeMode: controller.flutterThemeMode,
-          home: HomeShell(database: database, smsSource: smsSource),
+          home: AppLockWrapper(
+            service: appLockService,
+            child: HomeShell(database: database, smsSource: smsSource),
+          ),
         );
       },
     );
