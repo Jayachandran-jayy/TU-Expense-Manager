@@ -12,6 +12,20 @@ class LedgerPrefs {
   static const String _trackReceivedKey = 'ledger.track_received';
   static const String _aiFallbackKey = 'ledger.ai_fallback_enabled';
   static const String _customModelPathKey = 'ledger.custom_model_path';
+  static const String _appLockKey = 'app.lock_enabled';
+
+  /// Whether App Lock (biometric / screen lock credential) is enabled.
+  /// Defaults to false (off).
+  Future<bool> appLockEnabled() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_appLockKey) ?? false;
+  }
+
+  /// Sets whether App Lock is enabled.
+  Future<void> setAppLockEnabled(bool value) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_appLockKey, value);
+  }
 
   /// Whether received (credit) transactions should be tracked and shown.
   /// Defaults to false (off).

@@ -8,12 +8,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import io.flutter.embedding.android.FlutterActivity
+import android.view.WindowManager
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val tag = "TuExpenseTelephony"
     private val channelName = "com.tu.expense.manager/telephony"
     private var channel: MethodChannel? = null
@@ -27,6 +28,17 @@ class MainActivity : FlutterActivity() {
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
         channel?.setMethodCallHandler { call, result ->
             when (call.method) {
+                "setSecureFlag" -> {
+                    val secure = call.argument<Boolean>("secure") ?: false
+                    mainHandler.post {
+                        if (secure) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        }
+                    }
+                    result.success(true)
+                }
                 "readInbox" -> {
                     val since = (call.argument<Number>("since"))?.toLong()
                     backgroundExecutor.execute {

@@ -108,6 +108,14 @@ Banks often send inconsistent names for the exact same account or shop (e.g., `H
 - **1-Click Spreadsheet Backup**: Export your entire financial history to a standard `.xlsx` workbook viewable directly in Google Sheets or Excel. Restore with full database validation anytime.
 - **Optional Self-Hosted Web Client**: Spin up the lightweight Docker backend to view your ledger on desktop web browsers and queue edits across your private home network.
 
+### 11. 🔒 On-Device App Lock & Privacy (Biometrics & PIN)
+Protect sensitive financial records from prying eyes with hardware-backed security:
+- **Biometrics & System Screen Lock**: Seamlessly unlocks with fingerprint, face recognition, or your device screen lock PIN/pattern/password via Android BiometricPrompt.
+- **Off by Default**: Completely optional; activate anytime under **Settings › Preferences**.
+- **Activation & Deactivation Safeguards**: Requires immediate authentication verification before enabling or disabling to prevent accidental lockouts or unauthorized tampering.
+- **Instant Backgrounding Lock**: Automatically presents the lock screen immediately whenever the app is minimized or switched to the background.
+- **Recent Apps Privacy (`FLAG_SECURE`)**: Automatically protects the app window from screenshots and masks app previews in the Android app switcher when App Lock is active.
+
 ---
 
 ## 📸 Visual Tour
