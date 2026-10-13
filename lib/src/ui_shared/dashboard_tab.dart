@@ -68,6 +68,7 @@ class DashboardTab extends StatefulWidget {
     required this.onMonthsChanged,
     required this.onRefresh,
     this.emptyDetail,
+    this.includeCredits = false,
   });
 
   final List<ExpenseTxn> transactions;
@@ -76,6 +77,7 @@ class DashboardTab extends StatefulWidget {
   final YearMonth currentMonth;
   final NumberFormat money;
   final bool loading;
+  final bool includeCredits;
 
   /// What to say when a period has nothing in it, where the default advice does
   /// not apply — a browser has no way to add a transaction.
@@ -92,8 +94,11 @@ class _DashboardTabState extends State<DashboardTab> {
 
   @override
   Widget build(BuildContext context) {
-    final List<LedgerEntry> entries =
-        applyFilters(widget.transactions, months: widget.months);
+    final List<LedgerEntry> entries = applyFilters(
+      widget.transactions,
+      months: widget.months,
+      includeCredits: widget.includeCredits,
+    );
     final totals = periodTotals(entries);
     final Map<CategoryIdentity, double> byCategory = spendByCategory(entries);
     final List<DashboardView> views = availableViews(widget.months);

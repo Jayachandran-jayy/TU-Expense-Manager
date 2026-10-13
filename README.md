@@ -54,7 +54,9 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 - **Accurate Charting**: Filtered views and monthly reports count only the exact split lines corresponding to each category.
 
 ### 3. ⚡ Automated Bank SMS Ingestion & Manual Cash Entry
-- **Automatic Intake**: Reads transactional SMS from major banks and UPI gateways in real time without waking up unnecessary background services.
+- **Automatic Intake**: Reads transactional SMS from major Indian banks and UPI gateways in real time without waking up unnecessary background services. Supported formats include Indian Bank, HDFC (multiline & card), YES Bank, SBI, ICICI, Axis Bank, Kotak Mahindra, Canara Bank, Bank of Baroda, IDFC FIRST Bank, Federal Bank, Punjab National Bank (PNB), Union Bank of India, and RuPay card UPI.
+- **Inverted Date & Extended Ref Support**: Intelligently parses SMS structures where transaction dates precede merchants (e.g. `Sent Rs.90.00 from A/c *4668 on 12-10-26 to M/S.RAJALAKSHMI EDUCATION SERV...`) and captures `RRN`, `UTR`, or `Ref no` reference codes.
+- **Track Received Amounts Toggle (Off by Default)**: Control whether incoming credits and refunds appear in your transaction stream and monthly summaries. When disabled, your ledger focuses exclusively on actual spending; enable it anytime in Settings to track received income with green `+₹` badges and net cash flow stats.
 - **Manual Cash Tracking**: Need to record cash payments or transactions from unlinked accounts? Tap **+ Add Transaction** to log entries manually in seconds.
 - **Safe & Idempotent**: Multi-layer deduplication prevents double-counting, even if bank alerts are received multiple times or rescanned.
 - **Accurate Clock Time Extraction**: Accurately extracts explicit transaction clock times from diverse SMS timestamp formats (including ISO, commas, dots, `at`, and month-first names). When SMS bodies contain only a calendar date, the parser borrows the message arrival time (or defaults to midnight for manual paste) rather than zeroing timestamps.

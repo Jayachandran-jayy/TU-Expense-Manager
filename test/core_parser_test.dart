@@ -170,5 +170,198 @@ void main() {
       expect(parsed3, isNotNull);
       expect(parsed3!.date, DateTime(2026, 9, 21, 11, 20, 0));
     });
+
+    test('parses Indian Bank UPI debit with inverted date and RRN', () {
+      const sms = 'Sent Rs.90.00 from A/c *4668 on 12-10-26 to M/S.RAJALAKSHMI EDUCATION SERV.RRN 316719288101.Avl Bal Rs.778.39.Not you?SMS BLOCK to 9289592895-Indian Bank.';
+      final parsed = SmsParser.parse(sms);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'indian_bank_upi_sent');
+      expect(parsed.amount, 90.00);
+      expect(parsed.paymentType, 'A/c *4668');
+      expect(parsed.merchant, 'RAJALAKSHMI EDUCATION SERV');
+      expect(parsed.reference, '316719288101');
+      expect(parsed.direction, TxnDirection.debit);
+      expect(parsed.isCredit, isFalse);
+    });
+
+    test('parses HDFC multiline and single-line user templates', () {
+      const multiline1 = '''Sent Rs.50000.00
+From HDFC Bank A/C *2041
+To B rajamalar Princy Rajama
+On 12/10/26
+Ref 628514613614
+Not You?
+Call 18002586161/SMS BLOCK UPI to 7308080808''';
+      final p1 = SmsParser.parse(multiline1);
+      expect(p1, isNotNull);
+      expect(p1!.amount, 50000.00);
+      expect(p1.merchant, 'B rajamalar Princy Rajama');
+      expect(p1.reference, '628514613614');
+      expect(p1.direction, TxnDirection.debit);
+
+      const cardAlert = 'Spent Rs.2 On HDFC Bank Card 8174 At PPINAPPAUTH On 2026-10-07:20:57:59.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 8174 to 7308080808';
+      final p2 = SmsParser.parse(cardAlert);
+      expect(p2, isNotNull);
+      expect(p2!.amount, 2.0);
+      expect(p2.merchant, 'PPINAPPAUTH');
+      expect(p2.direction, TxnDirection.debit);
+
+      const multiline2 = '''Sent Rs.10.00
+From HDFC Bank A/C *0444
+To SSURIYA
+On 11/10/26
+Ref 131131522384
+Not You?
+Call 18002586161/SMS BLOCK UPI to 7308080808''';
+      final p3 = SmsParser.parse(multiline2);
+      expect(p3, isNotNull);
+      expect(p3!.amount, 10.00);
+      expect(p3.merchant, 'SSURIYA');
+      expect(p3.reference, '131131522384');
+      expect(p3.direction, TxnDirection.debit);
+    });
+
+    test('parses YES Bank card SMS template', () {
+      const sms = 'INR 55.00 spent on YES BANK Card X2858 @UPI_K M PROWIN INDUSTR 09-10-2026 11:00:46 am. Avl Lmt INR 284,919.00. SMS BLKCC 2858 to 9840909000 if not you';
+      final p = SmsParser.parse(sms);
+      expect(p, isNotNull);
+      expect(p!.amount, 55.00);
+      expect(p.merchant, 'K M PROWIN INDUSTR');
+      expect(p.direction, TxnDirection.debit);
+    });
+
+    test('parses SBI debited alert with space in Ref no and VPA cleaning', () {
+      const sms = 'Dear Customer, your a/c no. XXXXXXXX1234 is debited by Rs. 500.00 on 12-10-26 by UPI-ZOMATO-zomato@icici. Ref no 428192019283. Available bal: Rs. 14,500.25. -SBI';
+      final p = SmsParser.parse(sms);
+      expect(p, isNotNull);
+      expect(p!.amount, 500.00);
+      expect(p.merchant, 'ZOMATO');
+      expect(p.reference, '428192019283');
+      expect(p.direction, TxnDirection.debit);
+    });
+
+    test('parses Acct debited with alert', () {
+      const sms = 'Acct XX456 has been debited with INR 299.00 on 12-Oct-26 for UPI-SWIGGY. Bal: INR 8,210.50. Call 18002662 for dispute.';
+      final p = SmsParser.parse(sms);
+      expect(p, isNotNull);
+      expect(p!.amount, 299.00);
+      expect(p.merchant, 'SWIGGY');
+      expect(p.direction, TxnDirection.debit);
+    });
+
+    test('parses Axis Bank alert with POS- prefix', () {
+      const sms = 'Axis Bank Alert: Your A/C no. XXXXXX7890 is debited for INR 450.00 on 12-10-26. Info: POS-STARBUCKS. Available Balance: INR 12,300.00.';
+      final p = SmsParser.parse(sms);
+      expect(p, isNotNull);
+      expect(p!.amount, 450.00);
+      expect(p.merchant, 'STARBUCKS');
+      expect(p.direction, TxnDirection.debit);
+    });
+
+    test('parses credit alerts correctly and preserves debit direction for PZCREDIT', () {
+      const creditSms = 'A/c *1234 credited with INR 1,500.00 on 12-10-26 by EMPLOYER Ref 987654321';
+      final pCredit = SmsParser.parse(creditSms);
+      expect(pCredit, isNotNull);
+      expect(pCredit!.amount, 1500.00);
+      expect(pCredit.direction, TxnDirection.credit);
+      expect(pCredit.isCredit, isTrue);
+
+      // Debit alert containing "CREDIT" in merchant name must remain debit
+      const pzCreditSms = 'Spent Rs.39791.72 From HDFC Bank Card x2227 At PZCREDIT9772829 On 2026-08-11:06:08:24 Bal Rs.210943.42';
+      final pDebit = SmsParser.parse(pzCreditSms);
+      expect(pDebit, isNotNull);
+      expect(pDebit!.direction, TxnDirection.debit);
+      expect(pDebit.isCredit, isFalse);
+    });
+
+    test('parses Kotak, Canara, BOB, IDFC, Federal, PNB, and Union Bank templates', () {
+      // 1. Kotak Mahindra Debit
+      const kotakDebit = 'Rs 250.00 debited from a/c no. **1234 on 12-10-26 to SWIGGY Ref:123456789. Avail Bal: Rs 5000.00.';
+      final pKotakD = SmsParser.parse(kotakDebit);
+      expect(pKotakD, isNotNull);
+      expect(pKotakD!.amount, 250.00);
+      expect(pKotakD.merchant, 'SWIGGY');
+      expect(pKotakD.reference, '123456789');
+      expect(pKotakD.direction, TxnDirection.debit);
+
+      // 2. Kotak Mahindra Credit
+      const kotakCredit = 'Acct XX1234 credited by Rs 1200.00 on 12-10-26-Info: SALARY. Bal: Rs 45000.00.';
+      final pKotakC = SmsParser.parse(kotakCredit);
+      expect(pKotakC, isNotNull);
+      expect(pKotakC!.amount, 1200.00);
+      expect(pKotakC.merchant, 'SALARY');
+      expect(pKotakC.direction, TxnDirection.credit);
+      expect(pKotakC.isCredit, isTrue);
+
+      // 3. Canara Bank Debit
+      const canaraDebit = 'A/C 1234 debited by INR 500.00 on 12-10-26 10:30 trf to FLIPKART - Canara Bank. Bal: INR 12000.00.';
+      final pCanaraD = SmsParser.parse(canaraDebit);
+      expect(pCanaraD, isNotNull);
+      expect(pCanaraD!.amount, 500.00);
+      expect(pCanaraD.merchant, 'FLIPKART');
+      expect(pCanaraD.direction, TxnDirection.debit);
+
+      // 4. Canara Bank Credit
+      const canaraCredit = 'A/C 1234 credited by INR 5000.00 on 12-10-26 10:30 by GOOGLE INDIA - Canara Bank. Bal: INR 17000.00.';
+      final pCanaraC = SmsParser.parse(canaraCredit);
+      expect(pCanaraC, isNotNull);
+      expect(pCanaraC!.amount, 5000.00);
+      expect(pCanaraC.merchant, 'GOOGLE INDIA');
+      expect(pCanaraC.direction, TxnDirection.credit);
+      expect(pCanaraC.isCredit, isTrue);
+
+      // 5. Bank of Baroda Debit
+      const bobDebit = 'Bob A/c XX1234 debited by INR 350.00 on 12-10-26 towards UBER Ref 9876543210 Bal: INR 4500.00.';
+      final pBobD = SmsParser.parse(bobDebit);
+      expect(pBobD, isNotNull);
+      expect(pBobD!.amount, 350.00);
+      expect(pBobD.merchant, 'UBER');
+      expect(pBobD.reference, '9876543210');
+      expect(pBobD.direction, TxnDirection.debit);
+
+      // 6. IDFC FIRST Bank Debit
+      const idfcDebit = 'INR 850.00 debited from A/c XX5678 on 12-10-26 14:20:00 txn-UPI AMAZON. Available Balance: INR 25400.00.';
+      final pIdfcD = SmsParser.parse(idfcDebit);
+      expect(pIdfcD, isNotNull);
+      expect(pIdfcD!.amount, 850.00);
+      expect(pIdfcD.merchant, 'AMAZON');
+      expect(pIdfcD.direction, TxnDirection.debit);
+
+      // 7. Federal Bank Debit
+      const fedDebit = 'Dear Customer, A/C X9012 is debited by Rs. 2450.00 on 12-OCT-26 infavour of AMAZON. Bal: Rs. 15000.00.';
+      final pFedD = SmsParser.parse(fedDebit);
+      expect(pFedD, isNotNull);
+      expect(pFedD!.amount, 2450.00);
+      expect(pFedD.merchant, 'AMAZON');
+      expect(pFedD.direction, TxnDirection.debit);
+
+      // 8. Punjab National Bank (PNB) Debit
+      const pnbDebit = 'Rs.1200.00 debited from PNB A/C *1234 on 12-10-26 by UPI Info: SWIGGY Bal: Rs.8500.00.';
+      final pPnbD = SmsParser.parse(pnbDebit);
+      expect(pPnbD, isNotNull);
+      expect(pPnbD!.amount, 1200.00);
+      expect(pPnbD.merchant, 'SWIGGY');
+      expect(pPnbD.direction, TxnDirection.debit);
+
+      // 9. Union Bank of India Debit
+      const unionDebit = 'Rs 150.00 debited from A/c *1234 on 12-10-26 to CHAI POINT Ref 456789 Bal: Rs 3400.00.';
+      final pUnionD = SmsParser.parse(unionDebit);
+      expect(pUnionD, isNotNull);
+      expect(pUnionD!.amount, 150.00);
+      expect(pUnionD.merchant, 'CHAI POINT');
+      expect(pUnionD.reference, '456789');
+      expect(pUnionD.direction, TxnDirection.debit);
+
+      // 10. HDFC Credit with date preceding sender
+      const hdfcCredit = 'Rs.500.00 credited to HDFC Bank A/c XX0444 on 11/08/26 from RAPIDO Ref 123456789';
+      final pHdfcC = SmsParser.parse(hdfcCredit);
+      expect(pHdfcC, isNotNull);
+      expect(pHdfcC!.amount, 500.00);
+      expect(pHdfcC.merchant, 'RAPIDO');
+      expect(pHdfcC.reference, '123456789');
+      expect(pHdfcC.direction, TxnDirection.credit);
+      expect(pHdfcC.isCredit, isTrue);
+    });
   });
 }

@@ -97,10 +97,9 @@ const String _date = r'(?<date>'
     r'|\d{1,2}[-/]\d{1,2}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 13-09 14:30, 13-09
     r')';
 
-/// Optional "Ref 213313774670" / "Refno 123456789" / "UTR: 123456789" directly
-/// after the date. `\s+` rather than `[^\n]*?` so it reaches across the newline
-/// in HDFC's one-field-per-line UPI alerts.
-const String _ref = r'(?:\s+(?:Ref(?:no)?|UTR)\.?\s*:?\s*(?<ref>\w+))?';
+/// Optional "Ref 213313774670" / "Ref no 123456789" / "UTR: 123456789" / "RRN 316719288101"
+/// directly after the date or merchant.
+const String _ref = r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+))?';
 
 class SmsParser {
   /// Tried in order, first match wins. The four verified shapes come first so
@@ -157,6 +156,18 @@ class SmsParser {
           '$_date$_ref'),
     ),
 
+    /// Indian Bank UPI debit (date precedes merchant):
+    /// `Sent Rs.90.00 from A/c *4668 on 12-10-26 to M/S.RAJALAKSHMI EDUCATION SERV.RRN 316719288101.Avl Bal Rs.778.39`
+    SmsTemplate(
+      id: 'indian_bank_upi_sent',
+      direction: TxnDirection.debit,
+      pattern: _re('Sent\\s+$_cur$_amt\\s+(?:from|From)\\s+'
+          r'(?<instrument>[^\n]*?)\s+on\s+'
+          '$_date'
+          r'\s+(?:to|at|@)\s*(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Not you)|$)'),
+    ),
+
     /// `INR 160.00 spent using ICICI Bank Card XX8008 on 11-Aug-26 on
     ///  AMAZON PAY IN G. Avl Limit: INR 3,99,614.00.`
     SmsTemplate(
@@ -185,15 +196,21 @@ class SmsParser {
           r'(?:Ref(?:no)?|UTR)\.?\s*:?\s*(?<ref>\w+)'),
     ),
 
-    /// Axis-style debit: `INR 500.00 debited from A/c no. XX1234 on
-    ///  11-08-26 12:30:45 at AMAZON. Avl Bal INR 1000`
+    /// Axis/Kotak/PNB/IDFC/Union-style debited from account alerts:
+    /// `INR 500.00 debited from A/c no. XX1234 on 11-08-26 12:30:45 at AMAZON. Avl Bal INR 1000`
+    /// `Rs 250.00 debited from a/c no. **1234 on 12-10-26 to SWIGGY Ref:123456789. Avail Bal: Rs 5000.00.`
+    /// `INR 850.00 debited from A/c XX5678 on 12-10-26 14:20:00 txn-UPI AMAZON. Available Balance: INR 25400.00.`
+    /// `Rs.1200.00 debited from PNB A/C *1234 on 12-10-26 by UPI Info: SWIGGY Bal: Rs.8500.00.`
+    /// `Rs 150.00 debited from A/c *1234 on 12-10-26 to CHAI POINT Ref 456789 Bal: Rs 3400.00.`
     SmsTemplate(
       id: 'axis_debit',
       direction: TxnDirection.debit,
       pattern: _re('$_cur$_amt\\s+debited\\s+from\\s+'
           r'(?<instrument>[^\n]*?)\s+on\s+'
           '$_date'
-          r'\s+(?:at|to|towards|@)\s+(?<merchant>[^.\n]*?)\s*(?:[.\n]|$)'),
+          r'(?:\s+(?:infavour\s+of|towards|trf\s+to|by(?:\s+UPI)?|to|at|@|for)(?:\s+Info:?)?|[.\s\-]+(?:Info|txn-UPI):\s*|\s+txn-UPI\s*)\s*'
+          r'(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Avail|Not you|Call)|$)'),
     ),
 
     /// Kotak-style card debit: `Rs.500.00 spent on Kotak Bank Card X1234 on
@@ -207,6 +224,26 @@ class SmsParser {
           r'\s+(?:at|to|@|towards)\s+(?<merchant>[^.\n]*?)\s*(?:[.\n]|$)'),
     ),
 
+    /// General account debited alerts:
+    /// `Dear Customer, your a/c no. XXXXXXXX1234 is debited by Rs. 500.00 on 12-10-26 by UPI-ZOMATO-zomato@icici. Ref no 428192019283.`
+    /// `Acct XX456 has been debited with INR 299.00 on 12-Oct-26 for UPI-SWIGGY. Bal: INR 8,210.50.`
+    /// `Axis Bank Alert: Your A/C no. XXXXXX7890 is debited for INR 450.00 on 12-10-26. Info: POS-STARBUCKS.`
+    /// `A/C 1234 debited by INR 500.00 on 12-10-26 10:30 trf to FLIPKART - Canara Bank. Bal: INR 12000.00.`
+    /// `Bob A/c XX1234 debited by INR 350.00 on 12-10-26 towards UBER Ref 9876543210 Bal: INR 4500.00.`
+    /// `Dear Customer, A/C X9012 is debited by Rs. 2450.00 on 12-OCT-26 infavour of AMAZON. Bal: Rs. 15000.00.`
+    SmsTemplate(
+      id: 'general_acct_debited',
+      direction: TxnDirection.debit,
+      pattern: _re(r'(?<instrument>(?:[A-Za-z]+\s+)?(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*[Xx*]*\d+)\s+'
+          r'(?:is|has been)?\s*debited\s+(?:by|with|for)\s+'
+          '(?:$_cur)?$_amt'
+          r'\s+(?:on\s+date|on)\s+'
+          '$_date'
+          r'(?:\s+(?:infavour\s+of|towards|trf\s+to|by|to|at|@|for)|[.\s\-]+(?:Info|txn-UPI):\s*)\s*'
+          r'(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Avail|Not you|Call)|$)'),
+    ),
+
     /// `Rs.500.00 credited to HDFC Bank A/c XX0444 from RAPIDO on 11/08/26
     ///  Ref 123456789`
     SmsTemplate(
@@ -215,6 +252,17 @@ class SmsParser {
       pattern: _re('$_cur$_amt\\s+(?:has been\\s+)?credited\\s+to\\s+'
           r'(?<instrument>[^\n]*?)\s+(?:from|by)\s+(?<merchant>[^.\n]*?)\s+on\s+'
           '$_date$_ref'),
+    ),
+
+    /// `Rs.500.00 credited to HDFC Bank A/c XX0444 on 11/08/26 from RAPIDO Ref 123456789`
+    SmsTemplate(
+      id: 'generic_credit_date_first',
+      direction: TxnDirection.credit,
+      pattern: _re('$_cur$_amt\\s+(?:has been\\s+)?credited\\s+to\\s+'
+          r'(?<instrument>[^\n]*?)\s+on\s+'
+          '$_date'
+          r'\s+(?:from|by)\s+(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Avail|Not you|Call)|$)'),
     ),
 
     /// `Received Rs.500.00 in HDFC Bank A/c XX0444 from RAPIDO on 11/08/26
@@ -237,6 +285,23 @@ class SmsParser {
           r'\s+on\s+'
           '$_date'
           r'\s+(?:by|from)\s+(?<merchant>[^.\n]*?)\s*(?:[.\n]|$)'),
+    ),
+
+    /// General account credited alerts:
+    /// `A/c XX1234 credited with INR 500.00 on 12-10-26 by RAPIDO`
+    /// `Acct XX1234 credited by Rs 1200.00 on 12-10-26-Info: SALARY. Bal: Rs 45000.00.`
+    /// `A/C 1234 credited by INR 5000.00 on 12-10-26 10:30 by GOOGLE INDIA - Canara Bank. Bal: INR 17000.00.`
+    SmsTemplate(
+      id: 'general_acct_credited',
+      direction: TxnDirection.credit,
+      pattern: _re(r'(?<instrument>(?:[A-Za-z]+\s+)?(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*[Xx*]*\d+)\s+'
+          r'(?:is|has been)?\s*credited\s+(?:with|by|for)\s+'
+          '(?:$_cur)?$_amt'
+          r'\s+(?:on\s+date|on)\s+'
+          '$_date'
+          r'(?:\s+(?:infavour\s+of|by|from|to|at|@)|[.\s\-]+(?:Info|txn-UPI):\s*)\s*'
+          r'(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Avail|Not you|Call)|$)'),
     ),
   ];
 
@@ -606,13 +671,25 @@ class _Stamp {
 /// from raw merchant names while keeping the merchant's original text casing.
 String cleanMerchantName(String value) => tuCleanMerchantName(value);
 
-/// Implementation of UPI prefix stripper.
+/// Implementation of UPI and bank transport prefix stripper.
 String tuCleanMerchantName(String value) {
-  final trimmed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
-  final stripped = trimmed.replaceFirst(
-    RegExp(r'^upi[\s_\-\/]+', caseSensitive: false),
-    '',
+  var trimmed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  final prefixRe = RegExp(
+    r'^(?:upi|pos|info:?\s*pos|info:?|trf\s+to|txn-upi|infavour\s+of)[\s_\-\/:]+',
+    caseSensitive: false,
   );
-  final cleaned = stripped.replaceFirst(RegExp(r'[@.]+$'), '').trim();
+  while (prefixRe.hasMatch(trimmed)) {
+    trimmed = trimmed.replaceFirst(prefixRe, '').trim();
+  }
+  trimmed = trimmed.replaceFirst(RegExp(r'^m/s\.?\s*', caseSensitive: false), '');
+  var cleaned = trimmed.replaceFirst(RegExp(r'[@.]+$'), '').trim();
+  cleaned = cleaned.replaceFirst(
+    RegExp(r'-[a-zA-Z0-9.]+@[a-zA-Z0-9]+$', caseSensitive: false),
+    '',
+  ).trim();
+  cleaned = cleaned.replaceFirst(
+    RegExp(r'\s*-\s*[A-Za-z\s]*Bank$', caseSensitive: false),
+    '',
+  ).trim();
   return cleaned.isEmpty ? trimmed : cleaned;
 }
