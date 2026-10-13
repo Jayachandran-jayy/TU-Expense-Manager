@@ -138,7 +138,18 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
     2. **Interactive Inbox Assist**: In `UnaddedSmsScreen`, each message features a ✨ "Parse with on-device AI" action button. Tapping it runs inference with a loading dialog and navigates directly to `AddTransactionScreen` pre-filled with the extracted amount, merchant, direction, instrument, and date.
   - **Prompt Engineering & Direction Disambiguation**: Custom system instructions explicitly disambiguate debit vs credit ("type: debit if sent, spent, debited, paid, withdrawn, or transferred out; credit if received, credited, deposited, or refunded") to guarantee 100% direction fidelity even on tricky formats like Indian Bank ("Sent Rs.90 to M/S...").
   - **Settings Management & Interactive Tester**: Settings screen provides an on/off toggle, live download progress bar with cancelation, model storage badge with deletion, and an interactive test dialog allowing live testing against arbitrary SMS texts.
-  - **CI & Test Suite Safety**: Platform checks (`Platform.isAndroid`) and `getActiveModelPath()` guard against invoking native `llama.cpp` bindings during non-Android execution. Unit tests (`test/local_llm_service_test.dart`) test prompt generation, JSON extraction, and state management in milliseconds without requiring native binaries or weight downloads.
+  - **Interactive Scan & Review Workflow (`ScanReviewScreen`, `CandidateTransaction`)**:
+    - Scans all unadded and inbox SMS using both regex patterns (`SmsParser`) and on-device AI (`LocalLlmService`). Discovered candidates are deduplicated against existing database entries via `AppDatabase.isDuplicateOrDeleted()`.
+    - Presents results in a full-screen review list with individual selection checkboxes, bulk select/deselect all toggle, live total amount counter, directional badges (`+ ₹...` / `- ₹...`), and collapsible raw SMS preview.
+    - Commits selected candidates in an atomic database batch with category mapping resolution, removes processed records from `unadded_sms`, and triggers real-time ledger refresh.
+  - **Unified Paste Transaction Dialog (`PasteTransactionDialog`, `showPasteTransactionDialog`)**:
+    - Universal paste modal accepting raw bank/card SMS or email transaction text from device clipboard or manual entry.
+    - Cascades parsing through `SmsParser` -> `EmailParser` -> `LocalLlmService` (when on-device model is available).
+    - Navigates directly to `AddTransactionScreen` pre-filled with extracted amount, merchant, direction, payment instrument, notes, and date for one-tap manual verification before saving.
+  - **AI Quick Action Toolbar Sheet (`HomeShell._openAiToolsSheet`)**:
+    - Accessible directly via the ✨ `Icons.auto_awesome` action button in the Transactions app bar when AI is available.
+    - Presents a clean modal bottom sheet with one-tap access to "Scan existing SMS" (launches review flow) and "Paste transaction" (opens unified paste modal).
+  - **CI & Test Suite Safety**: Platform checks (`Platform.isAndroid`) and `getActiveModelPath()` guard against invoking native `llama.cpp` bindings during non-Android execution. Unit tests (`test/local_llm_service_test.dart`, `test/scan_review_test.dart`, `test/paste_transaction_test.dart`) test prompt generation, JSON extraction, scan review selection/commit, and paste dialog workflows in milliseconds without requiring native binaries or weight downloads.
 - **On-Device App Lock & Privacy Subsystem (`lib/src/mobile/services/app_lock_service.dart`, `AppLockWrapper`, `AppLockScreen`, `local_auth`)**:
   - **Biometrics & Device Screen Lock Fallback**: Leverages `local_auth: ^2.3.0` (`biometricOnly: false`) to authenticate via fingerprint, face recognition, or native screen lock credentials (PIN/pattern/password).
   - **FragmentActivity Requirement**: Android `MainActivity.kt` extends `FlutterFragmentActivity` to host `BiometricPrompt` safely without platform exceptions.

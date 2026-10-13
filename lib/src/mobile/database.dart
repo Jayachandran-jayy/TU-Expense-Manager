@@ -1131,7 +1131,8 @@ class AppDatabase {
   ///
   /// Credits go through the same mapping lookup on purpose — a refund from
   /// AMAZON landing back in Shopping is the useful behaviour.
-  Future<int> insertParsed(ParsedSms sms) async {
+  /// Checks whether a parsed transaction is already recorded or tombstoned.
+  Future<bool> isDuplicateOrDeleted(ParsedSms sms) async {
     final db = await database;
 
     final tombstone = await db.query(
@@ -1147,7 +1148,7 @@ class AppDatabase {
       ],
       limit: 1,
     );
-    if (tombstone.isNotEmpty) return 0;
+    if (tombstone.isNotEmpty) return true;
 
     // If the SMS carries a reference, check for any tombstone with same ref & amount
     if (sms.reference.isNotEmpty) {
@@ -1158,7 +1159,7 @@ class AppDatabase {
         whereArgs: <Object?>[sms.amount, sms.direction.name, sms.reference],
         limit: 1,
       );
-      if (refTombstone.isNotEmpty) return 0;
+      if (refTombstone.isNotEmpty) return true;
     } else {
       // Time-window tombstone check (within 60 seconds) for same merchant and amount
       final timeTombstone = await db.rawQuery(
@@ -1172,7 +1173,7 @@ class AppDatabase {
           sms.date.millisecondsSinceEpoch,
         ],
       );
-      if (timeTombstone.isNotEmpty) return 0;
+      if (timeTombstone.isNotEmpty) return true;
     }
 
     // 2. Existing Transaction check (Exact natural key)
@@ -1189,7 +1190,7 @@ class AppDatabase {
       ],
       limit: 1,
     );
-    if (existingExact.isNotEmpty) return 0;
+    if (existingExact.isNotEmpty) return true;
 
     // If reference is non-empty, check for matching reference + amount + direction
     if (sms.reference.isNotEmpty) {
@@ -1200,7 +1201,7 @@ class AppDatabase {
         whereArgs: <Object?>[sms.amount, sms.direction.name, sms.reference],
         limit: 1,
       );
-      if (refTxn.isNotEmpty) return 0;
+      if (refTxn.isNotEmpty) return true;
     } else {
       // If reference is empty, check time window (within 60 seconds) for identical merchant, amount, direction
       final timeTxn = await db.rawQuery(
@@ -1214,7 +1215,7 @@ class AppDatabase {
           sms.date.millisecondsSinceEpoch,
         ],
       );
-      if (timeTxn.isNotEmpty) return 0;
+      if (timeTxn.isNotEmpty) return true;
 
       // Only check same calendar day if the alert lacked an explicit clock time (date-only fallback)
       if (!sms.hasExplicitTime) {
@@ -1246,12 +1247,20 @@ class AppDatabase {
               existingPayment == 'Unknown' ||
               sms.paymentType == 'Unknown' ||
               existingPayment.toLowerCase() == sms.paymentType.toLowerCase()) {
-            return 0;
+            return true;
           }
         }
       }
     }
 
+    return false;
+  }
+
+  Future<int> insertParsed(ParsedSms sms) async {
+    final bool duplicateOrDeleted = await isDuplicateOrDeleted(sms);
+    if (duplicateOrDeleted) return 0;
+
+    final db = await database;
     final mapping = await db.query(
       'merchant_mappings',
       columns: <String>['category_id'],
