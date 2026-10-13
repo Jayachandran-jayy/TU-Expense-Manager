@@ -32,11 +32,13 @@ LedgerView deriveLedgerView({
   required YearMonth currentMonth,
   required LedgerSort sort,
 }) {
+  final bool includeCredits = requested.includeCredits;
   final List<String> paymentTypes = paymentTypeOptions(
     transactions,
     months: requested.months,
     categoryIds: requested.categoryIds,
     merchants: requested.merchants,
+    includeCredits: includeCredits,
   );
 
   // Each facet offers what the *other* filters leave available, so they
@@ -56,12 +58,14 @@ LedgerView deriveLedgerView({
     months: requested.months,
     merchants: requested.merchants,
     paymentTypes: requested.paymentTypes,
+    includeCredits: includeCredits,
   );
   final List<String> merchants = merchantOptions(
     transactions,
     months: requested.months,
     categoryIds: requested.categoryIds,
     paymentTypes: requested.paymentTypes,
+    includeCredits: includeCredits,
   );
   final List<YearMonth> months = monthOptions(
     transactions,
@@ -70,6 +74,7 @@ LedgerView deriveLedgerView({
     categoryIds: requested.categoryIds,
     merchants: requested.merchants,
     paymentTypes: requested.paymentTypes,
+    includeCredits: includeCredits,
   );
 
   // A selection can outlive its data — delete the last transaction on a card
@@ -91,6 +96,7 @@ LedgerView deriveLedgerView({
     months: requested.months,
     // Rebuilt field by field, so the query has to be carried explicitly too.
     query: requested.query,
+    includeCredits: requested.includeCredits,
   );
 
   return (
@@ -107,6 +113,7 @@ LedgerView deriveLedgerView({
         merchants: filters.merchants,
         paymentTypes: filters.paymentTypes,
         query: filters.query,
+        includeCredits: filters.includeCredits,
       ),
       sort,
     ),

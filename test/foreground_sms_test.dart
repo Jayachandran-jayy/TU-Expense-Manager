@@ -2,6 +2,7 @@ import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tu_expense_tracker/main.dart';
 import 'package:tu_expense_tracker/src/ui_shared/loading_dialog.dart';
 
@@ -133,6 +134,10 @@ class FakeSmsSource extends SmsSource {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
 
   group('SmsSource', () {
     test('simulateIncomingSms invokes the listener callback', () {

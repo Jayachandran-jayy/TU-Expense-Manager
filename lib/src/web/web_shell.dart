@@ -24,6 +24,7 @@ import 'package:intl/intl.dart';
 
 import '../core/edits.dart';
 import '../core/ledger.dart';
+import '../core/ledger_prefs.dart';
 import '../core/ledger_view.dart';
 import '../core/link_state.dart';
 import '../core/models.dart';
@@ -225,6 +226,9 @@ class _WebShellState extends State<WebShell> {
     if (!mounted) return;
     if (snapshot.failed) return _fail(snapshot.error!);
 
+    final bool trackReceived = await LedgerPrefs.instance.trackReceived();
+    if (!mounted) return;
+
     setState(() {
       _devices = devices.value!;
       _device = chosen;
@@ -237,6 +241,7 @@ class _WebShellState extends State<WebShell> {
       // the phone does it: a DateTime.now() per build would roll the answer over
       // mid-frame at midnight and be unpinnable in a test.
       _currentMonth = YearMonth.current();
+      _filters = _filters.copyWith(includeCredits: trackReceived);
       _loading = false;
     });
   }
@@ -467,10 +472,15 @@ class _WebShellState extends State<WebShell> {
         DashboardTab(
           transactions: store.transactions,
           months: _dashboardMonths,
-          monthChoices: monthOptions(store.transactions, current: _currentMonth),
+          monthChoices: monthOptions(
+            store.transactions,
+            current: _currentMonth,
+            includeCredits: _filters.includeCredits,
+          ),
           currentMonth: _currentMonth,
           money: _money,
           loading: _loading,
+          includeCredits: _filters.includeCredits,
           onMonthsChanged: (Set<YearMonth> months) =>
               setState(() => _dashboardMonths = months),
           onRefresh: () => _load(),
@@ -595,7 +605,7 @@ class _WebShellState extends State<WebShell> {
   Widget _themeMenu(BuildContext context) {
     final ThemeController controller = ThemeController.instance;
     return PopupMenuButton<void>(
-      tooltip: 'Appearance & Theme',
+      tooltip: 'Appearance & Settings',
       icon: const Icon(Icons.palette_outlined),
       itemBuilder: (BuildContext context) => <PopupMenuEntry<void>>[
         const PopupMenuItem<void>(
@@ -691,6 +701,26 @@ class _WebShellState extends State<WebShell> {
               ],
             ),
           ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<void>(
+          enabled: false,
+          child: Text(
+            'PREFERENCES',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+          ),
+        ),
+        CheckedPopupMenuItem<void>(
+          checked: _filters.includeCredits,
+          onTap: () async {
+            final bool next = !_filters.includeCredits;
+            await LedgerPrefs.instance.setTrackReceived(next);
+            if (!mounted) return;
+            setState(() {
+              _filters = _filters.copyWith(includeCredits: next);
+            });
+          },
+          child: const Text('Track received amounts'),
+        ),
       ],
     );
   }

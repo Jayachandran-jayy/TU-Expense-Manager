@@ -122,6 +122,7 @@ class LedgerFilters {
     this.merchants = const <String>{},
     this.paymentTypes = const <String>{},
     this.query = '',
+    this.includeCredits = false,
   });
 
   /// Where the ledger opens, and what Clear goes back to.
@@ -130,8 +131,8 @@ class LedgerFilters {
   /// the function keeps "no filter means everything", which is what lets every
   /// test of it stay written as it was, and what makes "all months" expressible
   /// at all.
-  factory LedgerFilters.defaults(YearMonth current) =>
-      LedgerFilters(months: <YearMonth>{current});
+  factory LedgerFilters.defaults(YearMonth current, {bool includeCredits = false}) =>
+      LedgerFilters(months: <YearMonth>{current}, includeCredits: includeCredits);
 
   /// Which months are on show. Empty means every month, consistent with
   /// [categoryIds] and [merchants] — but unlike them, empty is *not* where the
@@ -145,6 +146,10 @@ class LedgerFilters {
   /// What is typed in the search box. Empty means "not searching" — and because
   /// it is never null, it needs no companion flag the way [paymentType] did.
   final String query;
+
+  /// Whether received (credit) transactions are tracked and visible in the ledger.
+  /// False by default (spends only).
+  final bool includeCredits;
 
   bool get isEmpty =>
       months.isEmpty &&
@@ -175,6 +180,7 @@ class LedgerFilters {
     Set<String>? merchants,
     Set<String>? paymentTypes,
     String? query,
+    bool? includeCredits,
   }) =>
       LedgerFilters(
         months: months ?? this.months,
@@ -182,6 +188,7 @@ class LedgerFilters {
         merchants: merchants ?? this.merchants,
         paymentTypes: paymentTypes ?? this.paymentTypes,
         query: query ?? this.query,
+        includeCredits: includeCredits ?? this.includeCredits,
       );
 }
 
@@ -206,6 +213,7 @@ List<LedgerEntry> applyFilters(
   Set<String>? merchants,
   Set<String>? paymentTypes,
   String? query,
+  bool includeCredits = true,
 }) {
   final bool byMonth = months != null && months.isNotEmpty;
   final bool byCategory = categoryIds != null && categoryIds.isNotEmpty;
@@ -215,6 +223,7 @@ List<LedgerEntry> applyFilters(
 
   final List<LedgerEntry> entries = <LedgerEntry>[];
   for (final ExpenseTxn t in all) {
+    if (!includeCredits && t.isCredit) continue;
     // First because a month is now nearly always in force, and it is both the
     // cheapest test and by far the most selective one.
     if (byMonth && !months.contains(YearMonth.fromDate(t.date))) continue;
@@ -448,12 +457,14 @@ List<String> merchantOptions(
   Set<YearMonth>? months,
   Set<int>? categoryIds,
   Set<String>? paymentTypes,
+  bool includeCredits = true,
 }) {
   final List<String> merchants = applyFilters(
     all,
     months: months,
     categoryIds: categoryIds,
     paymentTypes: paymentTypes,
+    includeCredits: includeCredits,
   ).map((LedgerEntry e) => e.txn.merchant).toSet().toList()
     ..sort();
   return merchants;
@@ -478,6 +489,7 @@ List<ExpenseCategory> categoryOptions(
   Set<YearMonth>? months,
   Set<String>? merchants,
   Set<String>? paymentTypes,
+  bool includeCredits = true,
 }) {
   final Set<int> used = <int>{};
   for (final LedgerEntry entry in applyFilters(
@@ -485,6 +497,7 @@ List<ExpenseCategory> categoryOptions(
     months: months,
     merchants: merchants,
     paymentTypes: paymentTypes,
+    includeCredits: includeCredits,
   )) {
     for (final TxnSplit line in entry.lines) {
       used.add(line.categoryId);
@@ -502,12 +515,14 @@ List<String> paymentTypeOptions(
   Set<YearMonth>? months,
   Set<int>? categoryIds,
   Set<String>? merchants,
+  bool includeCredits = true,
 }) {
   final List<String> paymentTypes = applyFilters(
     all,
     months: months,
     categoryIds: categoryIds,
     merchants: merchants,
+    includeCredits: includeCredits,
   ).map((LedgerEntry e) => e.txn.paymentType).toSet().toList()
     ..sort();
   return paymentTypes;
@@ -535,6 +550,7 @@ List<YearMonth> monthOptions(
   Set<int>? categoryIds,
   Set<String>? merchants,
   Set<String>? paymentTypes,
+  bool includeCredits = true,
 }) {
   final Set<YearMonth> months = <YearMonth>{
     current,
@@ -544,6 +560,7 @@ List<YearMonth> monthOptions(
       categoryIds: categoryIds,
       merchants: merchants,
       paymentTypes: paymentTypes,
+      includeCredits: includeCredits,
     ).map((LedgerEntry e) => YearMonth.fromDate(e.txn.date)),
   };
   return months.toList()..sort((YearMonth a, YearMonth b) => b.compareTo(a));

@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import '../core/aliases.dart';
 import '../core/constants.dart';
 import '../core/ledger.dart';
+import '../core/ledger_prefs.dart';
 import '../core/ledger_view.dart';
 import '../core/link_state.dart';
 import '../core/models.dart';
@@ -142,6 +143,21 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   List<UnaddedSms> _unaddedSms = const <UnaddedSms>[];
 
   Future<void> _fetchUnadded() async {
+    final existing = await _db.unaddedSms();
+    var updated = false;
+    for (final msg in existing) {
+      final parsed = SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
+      if (parsed != null) {
+        final id = await _db.insertParsed(parsed);
+        if (id > 0) {
+          await _db.deleteUnaddedSms(msg.id);
+          updated = true;
+        }
+      }
+    }
+    if (updated) {
+      _transactions = await _db.transactions();
+    }
     final msgs = await _db.unaddedSms();
     if (mounted) setState(() => _unaddedSms = msgs);
   }
@@ -248,11 +264,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final results = await Future.wait(<Future<Object>>[
       _db.transactions(),
       _db.categories(),
+      LedgerPrefs.instance.trackReceived(),
     ]);
     if (!mounted) return;
     setState(() {
       _transactions = results[0] as List<ExpenseTxn>;
       _categories = results[1] as List<ExpenseCategory>;
+      final trackReceived = results[2] as bool;
+      _filters = _filters.copyWith(includeCredits: trackReceived);
       // An app left open across midnight on the last of the month rolls over
       // here, on the next refresh, scan or return from Settings — deterministic
       // and never mid-build.
@@ -1191,10 +1210,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             DashboardTab(
               transactions: _transactions,
               months: _dashboardMonths,
+              includeCredits: _filters.includeCredits,
               monthChoices: monthOptions(
                 _transactions,
                 current: _currentMonth,
                 keep: _dashboardMonths,
+                includeCredits: _filters.includeCredits,
               ),
               currentMonth: _currentMonth,
               money: _money,

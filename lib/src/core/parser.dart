@@ -97,10 +97,9 @@ const String _date = r'(?<date>'
     r'|\d{1,2}[-/]\d{1,2}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 13-09 14:30, 13-09
     r')';
 
-/// Optional "Ref 213313774670" / "Refno 123456789" / "UTR: 123456789" directly
-/// after the date. `\s+` rather than `[^\n]*?` so it reaches across the newline
-/// in HDFC's one-field-per-line UPI alerts.
-const String _ref = r'(?:\s+(?:Ref(?:no)?|UTR)\.?\s*:?\s*(?<ref>\w+))?';
+/// Optional "Ref 213313774670" / "Ref no 123456789" / "UTR: 123456789" / "RRN 316719288101"
+/// directly after the date or merchant.
+const String _ref = r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+))?';
 
 class SmsParser {
   /// Tried in order, first match wins. The four verified shapes come first so
@@ -155,6 +154,35 @@ class SmsParser {
           r'(?<instrument>[^\n]*?)\s+(?:To|@|at)\s*(?<merchant>[^\n]*?)\s+'
           r'(?:On\s+)?'
           '$_date$_ref'),
+    ),
+
+    /// Indian Bank UPI debit (date precedes merchant):
+    /// `Sent Rs.90.00 from A/c *4668 on 12-10-26 to M/S.RAJALAKSHMI EDUCATION SERV.RRN 316719288101.Avl Bal Rs.778.39`
+    SmsTemplate(
+      id: 'indian_bank_upi_sent',
+      direction: TxnDirection.debit,
+      pattern: _re('Sent\\s+$_cur$_amt\\s+(?:from|From)\\s+'
+          r'(?<instrument>[^\n]*?)\s+on\s+'
+          '$_date'
+          r'\s+(?:to|at|@)\s*(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Not you)|$)'),
+    ),
+
+    /// General account debited alerts:
+    /// `Dear Customer, your a/c no. XXXXXXXX1234 is debited by Rs. 500.00 on 12-10-26 by UPI-ZOMATO-zomato@icici. Ref no 428192019283.`
+    /// `Acct XX456 has been debited with INR 299.00 on 12-Oct-26 for UPI-SWIGGY. Bal: INR 8,210.50.`
+    /// `Axis Bank Alert: Your A/C no. XXXXXX7890 is debited for INR 450.00 on 12-10-26. Info: POS-STARBUCKS.`
+    SmsTemplate(
+      id: 'general_acct_debited',
+      direction: TxnDirection.debit,
+      pattern: _re(r'(?<instrument>(?:[A-Za-z]+\s+)?(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*[Xx*]*\d+)\s+'
+          r'(?:is|has been)?\s*debited\s+(?:by|with|for)\s+'
+          '$_cur?$_amt'
+          r'\s+(?:on\s+date|on)\s+'
+          '$_date'
+          r'(?:\s+(?:by|to|at|@|for|towards)|[.\s]+Info:\s*)\s*'
+          r'(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Not you|Call)|$)'),
     ),
 
     /// `INR 160.00 spent using ICICI Bank Card XX8008 on 11-Aug-26 on
@@ -237,6 +265,21 @@ class SmsParser {
           r'\s+on\s+'
           '$_date'
           r'\s+(?:by|from)\s+(?<merchant>[^.\n]*?)\s*(?:[.\n]|$)'),
+    ),
+
+    /// General account credited alerts:
+    /// `A/c XX1234 credited with INR 500.00 on 12-10-26 by RAPIDO`
+    SmsTemplate(
+      id: 'general_acct_credited',
+      direction: TxnDirection.credit,
+      pattern: _re(r'(?<instrument>(?:[A-Za-z]+\s+)?(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*[Xx*]*\d+)\s+'
+          r'(?:is|has been)?\s*credited\s+(?:with|by|for)\s+'
+          '$_cur?$_amt'
+          r'\s+(?:on\s+date|on)\s+'
+          '$_date'
+          r'(?:\s+(?:by|from|to|at|@)|[.\s]+Info:\s*)\s*'
+          r'(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Not you|Call)|$)'),
     ),
   ];
 
@@ -606,13 +649,18 @@ class _Stamp {
 /// from raw merchant names while keeping the merchant's original text casing.
 String cleanMerchantName(String value) => tuCleanMerchantName(value);
 
-/// Implementation of UPI prefix stripper.
+/// Implementation of UPI and bank transport prefix stripper.
 String tuCleanMerchantName(String value) {
-  final trimmed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
-  final stripped = trimmed.replaceFirst(
-    RegExp(r'^upi[\s_\-\/]+', caseSensitive: false),
+  var trimmed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  trimmed = trimmed.replaceFirst(
+    RegExp(r'^(?:upi|pos|info:?\s*pos|info:?)[\s_\-\/]+', caseSensitive: false),
     '',
   );
-  final cleaned = stripped.replaceFirst(RegExp(r'[@.]+$'), '').trim();
+  trimmed = trimmed.replaceFirst(RegExp(r'^m/s\.?\s*', caseSensitive: false), '');
+  var cleaned = trimmed.replaceFirst(RegExp(r'[@.]+$'), '').trim();
+  cleaned = cleaned.replaceFirst(
+    RegExp(r'-[a-zA-Z0-9.]+@[a-zA-Z0-9]+$', caseSensitive: false),
+    '',
+  ).trim();
   return cleaned.isEmpty ? trimmed : cleaned;
 }

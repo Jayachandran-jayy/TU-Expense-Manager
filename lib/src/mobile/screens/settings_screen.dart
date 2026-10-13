@@ -14,6 +14,7 @@ import '../../core/aliases.dart';
 import '../../core/backup_data.dart';
 import '../../core/backup_validate.dart';
 import '../../core/constants.dart';
+import '../../core/ledger_prefs.dart';
 import '../../ui_shared/loading_dialog.dart';
 import '../../ui_shared/theme_controller.dart';
 import '../../ui_shared/theme_models.dart';
@@ -60,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   DateTime? _lastChecked;
   bool _loading = true;
   bool _checking = false;
+  bool _trackReceived = false;
 
   /// One at a time, and neither while the other runs: both walk the whole
   /// database, and a restore landing halfway through an export would write a
@@ -112,6 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bool autoAfterScan = await sync.autoAfterScan();
     final bool autoSync = await sync.auto();
     final int autoMinutes = await sync.autoMinutes();
+    final bool trackReceived = await LedgerPrefs.instance.trackReceived();
 
     if (!mounted) return;
     setState(() {
@@ -128,8 +131,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _autoAfterScan = autoAfterScan;
       _auto = autoSync;
       _autoMinutes = autoMinutes;
+      _trackReceived = trackReceived;
       _loading = false;
     });
+  }
+
+  Future<void> _setTrackReceived(bool value) async {
+    setState(() => _trackReceived = value);
+    await LedgerPrefs.instance.setTrackReceived(value);
+    widget.onChanged?.call();
   }
 
   Future<void> _setAutoCheck(bool value) async {
@@ -714,6 +724,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+              const Divider(height: 32),
+              SettingsHeader('Preferences'),
+              SwitchListTile(
+                value: _trackReceived,
+                onChanged: _setTrackReceived,
+                title: const Text('Track received amounts'),
+                subtitle: const Text(
+                  'Show incoming credits, refunds, and received money in transactions and dashboard. Off by default.',
                 ),
               ),
               const Divider(height: 32),

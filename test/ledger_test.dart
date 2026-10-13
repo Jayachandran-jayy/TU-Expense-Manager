@@ -123,4 +123,43 @@ void main() {
       expect(deltaPercent(0, 0), isNull);
     });
   });
+
+  group('includeCredits filtering and totals', () {
+    final tDebit = _txn(id: 1, date: DateTime(2026, 8, 3), amount: 100);
+    final tCredit = _txn(
+      id: 2,
+      date: DateTime(2026, 8, 4),
+      amount: 500,
+      direction: TxnDirection.credit,
+    );
+    final all = <ExpenseTxn>[tDebit, tCredit];
+
+    test('applyFilters excludes credits by default (includeCredits: false)', () {
+      final entries = applyFilters(all, includeCredits: false);
+      expect(entries.length, 1);
+      expect(entries.first.txn.id, 1);
+      expect(entries.first.txn.isCredit, isFalse);
+
+      final totals = periodTotals(entries);
+      expect(totals.spent, 100);
+      expect(totals.received, 0);
+    });
+
+    test('applyFilters includes credits when includeCredits: true', () {
+      final entries = applyFilters(all, includeCredits: true);
+      expect(entries.length, 2);
+
+      final totals = periodTotals(entries);
+      expect(totals.spent, 100);
+      expect(totals.received, 500);
+    });
+
+    test('merchantOptions respects includeCredits flag', () {
+      final withoutCredits = merchantOptions(all, includeCredits: false);
+      expect(withoutCredits, <String>['Merchant 1']);
+
+      final withCredits = merchantOptions(all, includeCredits: true);
+      expect(withCredits, <String>['Merchant 1', 'Merchant 2']);
+    });
+  });
 }
