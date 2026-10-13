@@ -9,7 +9,9 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/models.dart';
+import '../../core/parser.dart';
 import '../database.dart';
+import '../services/local_llm_service.dart';
 import 'add_transaction_screen.dart';
 
 class UnaddedSmsScreen extends StatefulWidget {
@@ -87,6 +89,77 @@ class _UnaddedSmsScreenState extends State<UnaddedSmsScreen> {
     if (added == true) await _dismiss(msg);
   }
 
+  Future<void> _parseWithAi(UnaddedSms msg) async {
+    final bool isAvailable = await LocalLlmService.instance.isModelAvailable();
+    if (!mounted) return;
+    if (!isAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'On-device AI model not downloaded. Go to Settings → Preferences to download.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Expanded(child: Text('Parsing SMS with local AI...')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final ParsedSms? parsed = await LocalLlmService.instance.parseSms(
+        msg.body,
+        receivedAt: msg.receivedAt,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      if (parsed != null) {
+        final bool? added = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute<bool>(
+            builder: (_) => AddTransactionScreen(
+              categories: widget.categories,
+              merchants: widget.merchants,
+              paymentTypes: widget.paymentTypes,
+              initialSmsBody: msg.body,
+              initialAmount: parsed.amount,
+              initialMerchant: parsed.merchant,
+              initialPaymentType: parsed.paymentType,
+              initialDate: parsed.date,
+              initialDirection: parsed.direction,
+              initialNotes: parsed.reference.isNotEmpty ? 'Ref: ${parsed.reference}' : null,
+            ),
+          ),
+        );
+        if (added == true) await _dismiss(msg);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('AI could not extract transaction details from this SMS.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('AI parse error: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool hasUnread = _messages.any((UnaddedSms m) => !m.isRead);
@@ -128,9 +201,20 @@ class _UnaddedSmsScreenState extends State<UnaddedSmsScreen> {
                             : const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(msg.receivedAt.toString()),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => _dismiss(msg),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Parse with on-device AI',
+                            icon: const Icon(Icons.auto_awesome_outlined),
+                            onPressed: () => _parseWithAi(msg),
+                          ),
+                          IconButton(
+                            tooltip: 'Dismiss',
+                            icon: const Icon(Icons.close),
+                            onPressed: () => _dismiss(msg),
+                          ),
+                        ],
                       ),
                       onTap: () => _open(msg),
                     );

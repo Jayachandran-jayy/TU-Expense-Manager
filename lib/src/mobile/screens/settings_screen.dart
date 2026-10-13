@@ -23,6 +23,7 @@ import '../backup_dialogs.dart';
 import '../backup_files.dart';
 import '../connection_monitor.dart';
 import '../database.dart';
+import '../services/local_llm_service.dart';
 import '../sync_client.dart';
 import '../sync_prefs.dart';
 import '../update_service.dart';
@@ -62,6 +63,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _loading = true;
   bool _checking = false;
   bool _trackReceived = false;
+  bool _aiFallback = false;
+  bool _isAiModelAvailable = false;
+  int? _aiModelSizeBytes;
+  double? _downloadProgress;
+  bool _isAiDownloading = false;
 
   /// One at a time, and neither while the other runs: both walk the whole
   /// database, and a restore landing halfway through an export would write a
@@ -115,6 +121,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bool autoSync = await sync.auto();
     final int autoMinutes = await sync.autoMinutes();
     final bool trackReceived = await LedgerPrefs.instance.trackReceived();
+    final bool aiFallback = await LedgerPrefs.instance.aiFallbackEnabled();
+    final bool isAiAvailable = await LocalLlmService.instance.isModelAvailable();
+    final int? aiSizeBytes = await LocalLlmService.instance.getModelSizeBytes();
 
     if (!mounted) return;
     setState(() {
@@ -132,6 +141,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _auto = autoSync;
       _autoMinutes = autoMinutes;
       _trackReceived = trackReceived;
+      _aiFallback = aiFallback;
+      _isAiModelAvailable = isAiAvailable;
+      _aiModelSizeBytes = aiSizeBytes;
       _loading = false;
     });
   }
@@ -140,6 +152,226 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _trackReceived = value);
     await LedgerPrefs.instance.setTrackReceived(value);
     widget.onChanged?.call();
+  }
+
+  Future<void> _setAiFallback(bool value) async {
+    if (value && !_isAiModelAvailable) {
+      _showDownloadModelDialog();
+      return;
+    }
+    setState(() => _aiFallback = value);
+    await LedgerPrefs.instance.setAiFallbackEnabled(value);
+  }
+
+  void _showDownloadModelDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Download AI Model?'),
+        content: const Text(
+          'To use on-device AI parsing, download the lightweight Qwen 2.5 (0.5B) model (~397 MB).\n\n'
+          'The model runs 100% locally and offline on your device CPU. No internet is used during parsing, and you can delete it at any time.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Later')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _startModelDownload();
+            },
+            child: const Text('Download Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startModelDownload() {
+    setState(() {
+      _isAiDownloading = true;
+      _downloadProgress = 0.0;
+    });
+    LocalLlmService.instance.downloadDefaultModel().listen(
+      (progress) {
+        if (!mounted) return;
+        setState(() => _downloadProgress = progress);
+      },
+      onError: (err) {
+        if (!mounted) return;
+        setState(() {
+          _isAiDownloading = false;
+          _downloadProgress = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $err')),
+        );
+      },
+      onDone: () async {
+        if (!mounted) return;
+        final bool available = await LocalLlmService.instance.isModelAvailable();
+        final int? size = await LocalLlmService.instance.getModelSizeBytes();
+        if (!mounted) return;
+        setState(() {
+          _isAiDownloading = false;
+          _downloadProgress = null;
+          _isAiModelAvailable = available;
+          _aiModelSizeBytes = size;
+          _aiFallback = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI model downloaded and ready!')),
+        );
+      },
+      cancelOnError: true,
+    );
+  }
+
+  Future<void> _pickLocalModel() async {
+    final bool success = await LocalLlmService.instance.pickCustomModel();
+    if (!mounted) return;
+    if (success) {
+      final bool available = await LocalLlmService.instance.isModelAvailable();
+      final int? size = await LocalLlmService.instance.getModelSizeBytes();
+      if (!mounted) return;
+      setState(() {
+        _isAiModelAvailable = available;
+        _aiModelSizeBytes = size;
+        _aiFallback = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Custom model loaded and activated!')),
+      );
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No valid .gguf model selected.')),
+      );
+    }
+  }
+
+  Future<void> _deleteModel() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete AI Model?'),
+        content: const Text('This will delete the local AI model file and free up device storage.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await LocalLlmService.instance.deleteDefaultModel();
+      await LedgerPrefs.instance.setAiFallbackEnabled(false);
+      setState(() {
+        _isAiModelAvailable = false;
+        _aiModelSizeBytes = null;
+        _aiFallback = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI model deleted.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _testAiModel() async {
+    final textController = TextEditingController(
+      text: 'Sent Rs.90.00 from A/c *4668 on 12-10-26 to M/S.RAJALAKSHMI EDUCATION SERV. RRN 316719288101.',
+    );
+
+    final String? smsToTest = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Test On-Device AI'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Enter or paste any bank SMS to test on-device parsing:'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: textController,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Paste SMS body here...',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, textController.text.trim()),
+            child: const Text('Parse with AI'),
+          ),
+        ],
+      ),
+    );
+
+    if (smsToTest == null || smsToTest.isEmpty || !mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text('Running on-device AI...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final parsed = await LocalLlmService.instance.parseSms(smsToTest);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('AI Extraction Result'),
+          content: Text(
+            parsed != null
+                ? '• Amount: ₹${parsed.amount.toStringAsFixed(2)}\n'
+                  '• Type: ${parsed.direction.name.toUpperCase()}\n'
+                  '• Merchant: ${parsed.merchant}\n'
+                  '• Payment: ${parsed.paymentType}\n'
+                  '• Reference: ${parsed.reference.isNotEmpty ? parsed.reference : "None"}\n'
+                  '• Date: ${parsed.date.toIso8601String().split("T").first}'
+                : 'Could not extract transaction details from this SMS.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('AI Test Error'),
+          content: Text(e.toString()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<void> _setAutoCheck(bool value) async {
@@ -736,6 +968,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Show incoming credits, refunds, and received money in transactions and dashboard. Off by default.',
                 ),
               ),
+              const Divider(height: 16),
+              SwitchListTile(
+                value: _aiFallback,
+                onChanged: _setAiFallback,
+                title: const Text('On-device AI fallback'),
+                subtitle: Text(
+                  _isAiModelAvailable
+                      ? 'Enabled. Runs locally offline on device CPU when regex patterns fail.'
+                      : 'Uses local AI to parse unmatched bank SMS offline. Model download required (~397 MB).',
+                ),
+              ),
+              if (_isAiDownloading) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LinearProgressIndicator(value: _downloadProgress),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _downloadProgress != null
+                                ? 'Downloading: ${(_downloadProgress! * 100).toStringAsFixed(1)}%'
+                                : 'Connecting...',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              LocalLlmService.instance.cancelDownload();
+                              setState(() {
+                                _isAiDownloading = false;
+                                _downloadProgress = null;
+                              });
+                            },
+                            child: const Text('Cancel'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (_isAiModelAvailable) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      ActionChip(
+                        avatar: const Icon(Icons.play_arrow, size: 16),
+                        label: const Text('Test with sample SMS'),
+                        onPressed: _testAiModel,
+                      ),
+                      ActionChip(
+                        avatar: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                        label: Text(
+                          _aiModelSizeBytes != null
+                              ? 'Delete model (${(_aiModelSizeBytes! / (1024 * 1024)).toStringAsFixed(0)} MB)'
+                              : 'Delete model',
+                        ),
+                        onPressed: _deleteModel,
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      FilledButton.tonalIcon(
+                        icon: const Icon(Icons.download, size: 18),
+                        label: const Text('Download AI Model (~397 MB)'),
+                        onPressed: _startModelDownload,
+                      ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.folder_open, size: 18),
+                        label: const Text('Select .gguf file'),
+                        onPressed: _pickLocalModel,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const Divider(height: 32),
               SettingsHeader('Categorization'),
                 ListTile(
