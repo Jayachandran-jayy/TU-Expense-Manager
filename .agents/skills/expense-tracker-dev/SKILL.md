@@ -149,7 +149,7 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
     - Cascades parsing through `SmsParser` -> `EmailParser` -> `LocalLlmService` (when on-device model is available).
     - Navigates directly to `AddTransactionScreen` pre-filled with extracted amount, merchant, direction, payment instrument, notes, and date for one-tap manual verification before saving.
   - **AI Quick Action Toolbar Sheet (`HomeShell._openAiToolsSheet`)**:
-    - Accessible directly via the ✨ `Icons.auto_awesome` action button in the Transactions app bar when AI is available.
+    - Accessible directly via the Transaction Actions bottom sheet (`Icons.grid_view_rounded`) when AI is available.
     - Presents a clean modal bottom sheet with one-tap access to "Scan existing SMS" (launches review flow) and "Paste transaction" (opens unified paste modal).
   - **CI & Test Suite Safety**: Platform checks (`Platform.isAndroid`) and `getActiveModelPath()` guard against invoking native `llama.cpp` bindings during non-Android execution. Unit tests (`test/local_llm_service_test.dart`, `test/scan_review_test.dart`, `test/paste_transaction_test.dart`) test prompt generation, JSON extraction, scan review selection/commit, and paste dialog workflows in milliseconds without requiring native binaries or weight downloads.
 - **On-Device App Lock & Privacy Subsystem (`lib/src/mobile/services/app_lock_service.dart`, `AppLockWrapper`, `AppLockScreen`, `local_auth`)**:
@@ -191,6 +191,12 @@ When filters change:
 
 ## 4. UI Patterns, Multi-Theme System, Category Emojis & Cards
 
+- **Consolidated Transaction Actions Sheet (`HomeShell._openTransactionActionsSheet`)**:
+  - Replaces crowded individual app bar icon buttons on the Transactions page with a single `Icons.grid_view_rounded` ("Actions") button.
+  - Opening the modal bottom sheet displays: "Check for new SMS" (with active progress spinner if scanning), "Unadded SMS" (with unread count badge), "Email transactions", "AI tools" (when on-device model is available), "Paste transaction", "Deleted transactions", and "Rescan all messages".
+  - Frees the top app bar width entirely so the "Transactions" title is never cut off or truncated.
+- **Vertical Icon + Text Theme Mode Selector (`SettingsScreen`)**:
+  - The `SegmentedButton<AppThemeMode>` displays `System`, `Light`, `Dark`, and `OLED` with an icon stacked vertically above single-line text inside each segment, ensuring zero awkward word wrapping across narrow mobile screens.
 - **Category Emojis, Custom Icons & Multi-Style Icon Packs (`lib/src/ui_shared/palette.dart`, `categories_screen.dart`, `models.dart`)**:
   - **Vibrant WhatsApp / Fluent Style Category Emojis**: Every category has a colorful emoji representation. Defaults include 🛒 Grocery, 🍔 Food, ⛽ Fuel, 🛍️ Shopping, 💡 Bills & Utilities, ✈️ Travel, 🎬 Entertainment, 💊 Health, ❓ Uncategorized, 💰 Income/Savings, 🏦 Loans/EMI, 🥚 Egg, 🍗/🥩/🐟 Non-Veg/Meat/Fish, 👨 Papa/Family, 💄 Cosmetics/Beauty, 🥛 Milk/Dairy, 🍿 Snacks, and 🥗 Veggies/Fruits.
   - **Smart Automatic Keyword Matching & Legacy Fallback Upgrade (`suggestCategoryEmoji`, `categoryEmoji`, `categoryVectorIcon`)**: Automatically suggests contextual emojis and vector icons when typing category names (e.g. coffee/cafe -> ☕, loans/emi/debt -> 🏦, egg/anda/omelet -> 🥚, non-veg/chicken/biryani -> 🍗, meat/mutton -> 🥩, fish/seafood -> 🐟, papa/family/dad -> 👨, savings/deposit -> 💰, cosmetics/makeup -> 💄, milk/dairy -> 🥛, snacks/bakery -> 🍿, veggies/fruits/salad -> 🥗, rent/house -> 🏠, gym/fitness -> 🏋️, cab/uber -> 🚕, pet/dog -> 🐾, gaming/steam -> 🎮, books/college -> 📚, salon/hair -> ✂️, bills -> 💡, crypto/stocks -> 📈, etc.). `categoryEmoji()` automatically upgrades legacy fallback records (`icon == '🏷️'` or empty) to contextual emojis.
