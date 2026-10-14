@@ -231,6 +231,34 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       expect(p.direction, TxnDirection.debit);
     });
 
+    test('parses YES Bank card SMS with merchant containing month-prefix word and trailing store number', () {
+      const sms = 'INR 135.00 spent on YES BANK Card X2858 @UPI_KK SUPER MARKET 1 14-10-2026 10:30:25 am. Avl Lmt INR 283,964.00. SMS BLKCC 2858 to 9840909000 if not you.';
+      final p = SmsParser.parse(sms);
+      expect(p, isNotNull);
+      expect(p!.amount, 135.00);
+      expect(p.merchant, 'KK SUPER MARKET 1');
+      expect(p.paymentType, 'YES BANK Card X2858');
+      expect(p.direction, TxnDirection.debit);
+      expect(p.date, DateTime(2026, 10, 14, 10, 30, 25));
+      expect(p.hasExplicitTime, isTrue);
+      expect(p.templateId, 'yes_card');
+    });
+
+    test('parses alerts with merchants containing month prefix words without false matching', () {
+      const smsDecathlon = 'INR 899.00 spent on YES BANK Card X2858 @DECATHLON 5 14-10-2026 05:20:10 pm. Avl Lmt INR 283,000.00.';
+      final pDec = SmsParser.parse(smsDecathlon);
+      expect(pDec, isNotNull);
+      expect(pDec!.merchant, 'DECATHLON 5');
+      expect(pDec.amount, 899.00);
+      expect(pDec.date, DateTime(2026, 10, 14, 17, 20, 10));
+
+      const smsFullMonth = 'INR 250.00 spent on YES BANK Card X2858 @COFFEE CAFE 14-October-2026 11:15:00 am.';
+      final pMonth = SmsParser.parse(smsFullMonth);
+      expect(pMonth, isNotNull);
+      expect(pMonth!.date.month, 10);
+      expect(pMonth.date.day, 14);
+    });
+
     test('parses SBI debited alert with space in Ref no and VPA cleaning', () {
       const sms = 'Dear Customer, your a/c no. XXXXXXXX1234 is debited by Rs. 500.00 on 12-10-26 by UPI-ZOMATO-zomato@icici. Ref no 428192019283. Available bal: Rs. 14,500.25. -SBI';
       final p = SmsParser.parse(sms);
