@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:enough_mail/enough_mail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -159,13 +160,46 @@ class EnoughMailClientAdapter implements EmailClientAdapter {
   }
 }
 
-/// Service managing Gmail connection credentials and email retrieval.
+/// Represents a saved email account configuration.
+class EmailAccount {
+  const EmailAccount({
+    required this.email,
+    required this.appPassword,
+  });
+
+  final String email;
+  final String appPassword;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'email': email,
+        'appPassword': appPassword,
+      };
+
+  factory EmailAccount.fromJson(Map<String, dynamic> json) => EmailAccount(
+        email: (json['email'] as String? ?? '').trim(),
+        appPassword: (json['appPassword'] as String? ?? '').trim(),
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmailAccount &&
+          runtimeType == other.runtimeType &&
+          email.toLowerCase() == other.email.toLowerCase();
+
+  @override
+  int get hashCode => email.toLowerCase().hashCode;
+}
+
+/// Service managing Gmail connection credentials and email retrieval for single or multiple accounts.
 class EmailService {
   EmailService._();
   static final EmailService instance = EmailService._();
 
-  static const String _kEmailKey = 'email_sync.gmail_address';
-  static const String _kAppPasswordKey = 'email_sync.app_password';
+  static const String _kAccountsKey = 'email_sync.accounts_json';
+  static const String _kActiveEmailKey = 'email_sync.active_account_email';
+  static const String _kLegacyEmailKey = 'email_sync.gmail_address';
+  static const String _kLegacyAppPasswordKey = 'email_sync.app_password';
   static const String _kDismissedIdsKey = 'email_sync.dismissed_ids';
 
   EmailClientAdapter? _clientAdapter;
@@ -176,32 +210,145 @@ class EmailService {
     _clientAdapter = adapter;
   }
 
-  Future<String?> getSavedEmail() async {
+  /// Returns all configured email accounts, performing automatic migration from legacy single-account keys if needed.
+  Future<List<EmailAccount>> getAccounts() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_kEmailKey);
+    final raw = prefs.getString(_kAccountsKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          return decoded
+              .map((item) => EmailAccount.fromJson(item as Map<String, dynamic>))
+              .where((acc) => acc.email.isNotEmpty && acc.appPassword.isNotEmpty)
+              .toList();
+        }
+      } catch (_) {}
+    }
+
+    // Check legacy single-account migration
+    final legacyEmail = prefs.getString(_kLegacyEmailKey);
+    final legacyPassword = prefs.getString(_kLegacyAppPasswordKey);
+    if (legacyEmail != null &&
+        legacyEmail.isNotEmpty &&
+        legacyPassword != null &&
+        legacyPassword.isNotEmpty) {
+      final account = EmailAccount(
+        email: legacyEmail.trim(),
+        appPassword: legacyPassword.trim(),
+      );
+      final list = <EmailAccount>[account];
+      await prefs.setString(
+          _kAccountsKey, jsonEncode(list.map((e) => e.toJson()).toList()));
+      await prefs.setString(_kActiveEmailKey, account.email);
+      await prefs.remove(_kLegacyEmailKey);
+      await prefs.remove(_kLegacyAppPasswordKey);
+      return list;
+    }
+
+    return <EmailAccount>[];
   }
 
-  Future<String?> getSavedAppPassword() async {
+  /// Returns the email address of the currently active account.
+  Future<String?> getActiveEmail() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_kAppPasswordKey);
+    final active = prefs.getString(_kActiveEmailKey);
+    final accounts = await getAccounts();
+    if (accounts.isEmpty) return null;
+    if (active != null &&
+        accounts.any((a) => a.email.toLowerCase() == active.toLowerCase())) {
+      return active;
+    }
+    return accounts.first.email;
   }
 
+  /// Sets the active account to the specified email.
+  Future<void> setActiveEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kActiveEmailKey, email.trim());
+  }
+
+  /// Returns the currently active [EmailAccount] or null if no accounts exist.
+  Future<EmailAccount?> getActiveAccount() async {
+    final accounts = await getAccounts();
+    if (accounts.isEmpty) return null;
+    final activeEmail = await getActiveEmail();
+    if (activeEmail == null) return accounts.first;
+    try {
+      return accounts.firstWhere(
+          (a) => a.email.toLowerCase() == activeEmail.toLowerCase());
+    } catch (_) {
+      return accounts.first;
+    }
+  }
+
+  /// Checks if at least one email account is configured.
   Future<bool> isConfigured() async {
-    final email = await getSavedEmail();
-    final password = await getSavedAppPassword();
-    return email != null && email.isNotEmpty && password != null && password.isNotEmpty;
+    final accounts = await getAccounts();
+    return accounts.isNotEmpty;
   }
 
-  Future<void> saveCredentials(String email, String appPassword) async {
+  /// Saves or updates an email account, setting it as the active account.
+  Future<void> saveAccount(String email, String appPassword) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kEmailKey, email.trim());
-    await prefs.setString(_kAppPasswordKey, appPassword.trim().replaceAll(' ', ''));
+    final accounts = await getAccounts();
+    final cleanEmail = email.trim();
+    final cleanPassword = appPassword.trim().replaceAll(' ', '');
+
+    final index = accounts.indexWhere(
+        (a) => a.email.toLowerCase() == cleanEmail.toLowerCase());
+    final updated = List<EmailAccount>.from(accounts);
+    final newAccount = EmailAccount(email: cleanEmail, appPassword: cleanPassword);
+    if (index >= 0) {
+      updated[index] = newAccount;
+    } else {
+      updated.add(newAccount);
+    }
+
+    await prefs.setString(
+        _kAccountsKey, jsonEncode(updated.map((e) => e.toJson()).toList()));
+    await setActiveEmail(cleanEmail);
   }
 
+  /// Removes an email account. If the removed account was active, switches to the next available account.
+  Future<void> removeAccount(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    final accounts = await getAccounts();
+    final cleanEmail = email.trim().toLowerCase();
+    final updated =
+        accounts.where((a) => a.email.toLowerCase() != cleanEmail).toList();
+
+    await prefs.setString(
+        _kAccountsKey, jsonEncode(updated.map((e) => e.toJson()).toList()));
+
+    final activeEmail = prefs.getString(_kActiveEmailKey);
+    if (activeEmail?.toLowerCase() == cleanEmail) {
+      if (updated.isNotEmpty) {
+        await prefs.setString(_kActiveEmailKey, updated.first.email);
+      } else {
+        await prefs.remove(_kActiveEmailKey);
+      }
+    }
+  }
+
+  /// Backward-compatible getter for active email.
+  Future<String?> getSavedEmail() async => (await getActiveAccount())?.email;
+
+  /// Backward-compatible getter for active app password.
+  Future<String?> getSavedAppPassword() async =>
+      (await getActiveAccount())?.appPassword;
+
+  /// Backward-compatible saver for credentials.
+  Future<void> saveCredentials(String email, String appPassword) =>
+      saveAccount(email, appPassword);
+
+  /// Clears all saved email accounts and credentials.
   Future<void> clearCredentials() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kEmailKey);
-    await prefs.remove(_kAppPasswordKey);
+    await prefs.remove(_kAccountsKey);
+    await prefs.remove(_kActiveEmailKey);
+    await prefs.remove(_kLegacyEmailKey);
+    await prefs.remove(_kLegacyAppPasswordKey);
   }
 
   Future<List<String>> getDismissedIds() async {
@@ -218,14 +365,32 @@ class EmailService {
     }
   }
 
-  Future<List<EmailMessageItem>> fetchEmails({int days = 14}) async {
-    final email = await getSavedEmail();
-    final password = await getSavedAppPassword();
-    if (email == null || password == null || email.isEmpty || password.isEmpty) {
-      throw StateError('Gmail is not configured. Please enter your Gmail address and App Password.');
+  /// Fetches recent emails for the specified [accountEmail], or the active account if omitted.
+  Future<List<EmailMessageItem>> fetchEmails({
+    int days = 14,
+    String? accountEmail,
+  }) async {
+    EmailAccount? targetAccount;
+    if (accountEmail != null && accountEmail.isNotEmpty) {
+      final accounts = await getAccounts();
+      targetAccount = accounts.cast<EmailAccount?>().firstWhere(
+            (a) => a?.email.toLowerCase() == accountEmail.toLowerCase(),
+            orElse: () => null,
+          );
+    }
+    targetAccount ??= await getActiveAccount();
+
+    if (targetAccount == null ||
+        targetAccount.email.isEmpty ||
+        targetAccount.appPassword.isEmpty) {
+      throw StateError(
+          'Gmail is not configured. Please enter your Gmail address and App Password.');
     }
 
-    await adapter.connectAndLogin(email: email, appPassword: password);
+    await adapter.connectAndLogin(
+      email: targetAccount.email,
+      appPassword: targetAccount.appPassword,
+    );
     try {
       final items = await adapter.fetchRecentEmails(days: days);
       final dismissed = await getDismissedIds();

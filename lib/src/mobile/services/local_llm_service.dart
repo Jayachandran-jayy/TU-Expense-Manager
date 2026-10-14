@@ -15,6 +15,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:llama_flutter_android/llama_flutter_android.dart';
 
+import '../../core/email_parser.dart';
 import '../../core/ledger_prefs.dart';
 import '../../core/parser.dart';
 
@@ -225,15 +226,19 @@ class LocalLlmService {
     _loadedModelPath = modelPath;
   }
 
-  /// Parses a bank SMS message using the local on-device LLM.
-  Future<ParsedSms?> parseSms(String smsBody, {DateTime? receivedAt}) async {
+  /// Parses a bank transaction SMS or email alert using the local on-device LLM.
+  Future<ParsedSms?> parseTransactionText(
+    String messageText, {
+    DateTime? receivedAt,
+    String messageType = 'Message',
+  }) async {
     if (!Platform.isAndroid) return null;
 
     await _ensureLoaded();
     if (_controller == null) return null;
 
     const String systemPrompt =
-        'You are an expert bank transaction SMS parser. Extract transaction details from the SMS into JSON format.\n'
+        'You are an expert bank transaction parser. Extract transaction details from the bank notification (SMS or email) into JSON format.\n'
         'Output ONLY a single valid JSON object with the following keys:\n'
         '"is_transaction": true or false,\n'
         '"type": "debit" if money was sent, spent, debited, paid, withdrawn, or transferred out; "credit" if money was received, credited, deposited, or refunded,\n'
@@ -247,7 +252,7 @@ class LocalLlmService {
 
     final List<ChatMessage> messages = <ChatMessage>[
       ChatMessage(role: 'system', content: systemPrompt),
-      ChatMessage(role: 'user', content: 'SMS: "$smsBody"'),
+      ChatMessage(role: 'user', content: '$messageType: "$messageText"'),
     ];
 
     final StringBuffer buffer = StringBuffer();
@@ -283,6 +288,18 @@ class LocalLlmService {
     } finally {
       await sub.cancel();
     }
+  }
+
+  /// Parses a bank SMS message using the local on-device LLM.
+  Future<ParsedSms?> parseSms(String smsBody, {DateTime? receivedAt}) =>
+      parseTransactionText(smsBody, receivedAt: receivedAt, messageType: 'SMS');
+
+  /// Parses a bank transaction email alert using the local on-device LLM.
+  /// Automatically strips HTML tags and caps context length to ensure high fidelity.
+  Future<ParsedSms?> parseEmail(String emailBody, {DateTime? receivedAt}) async {
+    final String clean = EmailParser.stripHtml(emailBody);
+    final String trimmed = clean.length > 1500 ? clean.substring(0, 1500) : clean;
+    return parseTransactionText(trimmed, receivedAt: receivedAt, messageType: 'Email');
   }
 
   /// Parses model JSON output into a [ParsedSms]. Public for unit testing.

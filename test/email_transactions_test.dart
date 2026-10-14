@@ -10,6 +10,8 @@ import 'package:tu_expense_tracker/src/mobile/services/email_service.dart';
 
 class FakeEmailAdapter implements EmailClientAdapter {
   bool connected = false;
+  String? lastEmail;
+  String? lastPassword;
   List<EmailMessageItem> cannedEmails = <EmailMessageItem>[];
 
   @override
@@ -21,6 +23,8 @@ class FakeEmailAdapter implements EmailClientAdapter {
       throw Exception('Invalid credentials or app password');
     }
     connected = true;
+    lastEmail = email;
+    lastPassword = appPassword;
   }
 
   @override
@@ -92,6 +96,74 @@ void main() {
       expect(items.length, 2);
       expect(items[0].isDismissed, isFalse);
       expect(items[1].isDismissed, isTrue);
+    });
+
+    test('multi-account management: add, list, switch, remove', () async {
+      final service = EmailService.instance;
+      await service.clearCredentials();
+
+      await service.saveAccount('primary@gmail.com', 'pass111122223333');
+      await service.saveAccount('secondary@gmail.com', 'pass444455556666');
+
+      final accounts = await service.getAccounts();
+      expect(accounts.length, 2);
+      expect(accounts.map((a) => a.email), containsAll(<String>[
+        'primary@gmail.com',
+        'secondary@gmail.com',
+      ]));
+
+      // Latest added account becomes active by default
+      expect(await service.getActiveEmail(), 'secondary@gmail.com');
+
+      // Switch active to primary
+      await service.setActiveEmail('primary@gmail.com');
+      expect(await service.getActiveEmail(), 'primary@gmail.com');
+      final activeAcc = await service.getActiveAccount();
+      expect(activeAcc?.email, 'primary@gmail.com');
+      expect(activeAcc?.appPassword, 'pass111122223333');
+
+      // Remove active account -> falls back to remaining
+      await service.removeAccount('primary@gmail.com');
+      final remaining = await service.getAccounts();
+      expect(remaining.length, 1);
+      expect(remaining.first.email, 'secondary@gmail.com');
+      expect(await service.getActiveEmail(), 'secondary@gmail.com');
+    });
+
+    test('legacy single-account migration to multi-account format', () async {
+      final service = EmailService.instance;
+      await service.clearCredentials();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('email_sync.gmail_address', 'legacy@gmail.com');
+      await prefs.setString('email_sync.app_password', 'legacyapppass1234');
+
+      final accounts = await service.getAccounts();
+      expect(accounts.length, 1);
+      expect(accounts.first.email, 'legacy@gmail.com');
+      expect(accounts.first.appPassword, 'legacyapppass1234');
+      expect(await service.getActiveEmail(), 'legacy@gmail.com');
+
+      // Check legacy keys were cleared
+      expect(prefs.getString('email_sync.gmail_address'), isNull);
+      expect(prefs.getString('email_sync.app_password'), isNull);
+    });
+
+    test('fetchEmails targets specified accountEmail', () async {
+      final service = EmailService.instance;
+      final fake = FakeEmailAdapter();
+      service.setAdapterForTesting(fake);
+
+      await service.saveAccount('acc1@gmail.com', 'pass1111');
+      await service.saveAccount('acc2@gmail.com', 'pass2222');
+
+      await service.fetchEmails(days: 7, accountEmail: 'acc1@gmail.com');
+      expect(fake.lastEmail, 'acc1@gmail.com');
+      expect(fake.lastPassword, 'pass1111');
+
+      await service.fetchEmails(days: 7, accountEmail: 'acc2@gmail.com');
+      expect(fake.lastEmail, 'acc2@gmail.com');
+      expect(fake.lastPassword, 'pass2222');
     });
   });
 
@@ -442,6 +514,201 @@ void main() {
       expect(find.byType(AddTransactionScreen), findsOneWidget);
       expect(find.text('11:20 AM'), findsOneWidget);
       expect(find.text('12:00 AM'), findsNothing);
+    });
+
+    testWidgets('multi-account UI: switch accounts via bottom sheet',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final fake = FakeEmailAdapter();
+      final service = EmailService.instance;
+      service.setAdapterForTesting(fake);
+      await service.clearCredentials();
+      await service.saveAccount('primary@gmail.com', 'pass1111');
+      await service.saveAccount('secondary@gmail.com', 'pass2222');
+      await service.setActiveEmail('primary@gmail.com');
+
+      fake.cannedEmails = <EmailMessageItem>[
+        EmailMessageItem(
+          id: 'email_primary_1',
+          subject: 'Primary Alert',
+          from: 'alerts@hdfcbank.net',
+          date: DateTime.now(),
+          body: 'Spent INR 100 at SWIGGY',
+        ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EmailTransactionsScreen(
+            categories: categories,
+            merchants: merchants,
+            paymentTypes: paymentTypes,
+            transactions: const <ExpenseTxn>[],
+            onChanged: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Connected: primary@gmail.com'), findsOneWidget);
+      expect(find.text('2 accounts connected · Tap to switch'), findsOneWidget);
+      expect(fake.lastEmail, 'primary@gmail.com');
+
+      // Tap account selector card to open bottom sheet
+      await tester.tap(find.text('Connected: primary@gmail.com'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gmail Accounts'), findsOneWidget);
+      expect(find.text('Add Account'), findsOneWidget);
+      expect(find.text('secondary@gmail.com'), findsOneWidget);
+
+      // Change canned emails to secondary
+      fake.cannedEmails = <EmailMessageItem>[
+        EmailMessageItem(
+          id: 'email_secondary_1',
+          subject: 'Secondary Alert',
+          from: 'alerts@icicibank.com',
+          date: DateTime.now(),
+          body: 'Spent INR 200 at ZOMATO',
+        ),
+      ];
+
+      // Switch to secondary
+      await tester.tap(find.text('secondary@gmail.com'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Connected: secondary@gmail.com'), findsOneWidget);
+      expect(fake.lastEmail, 'secondary@gmail.com');
+      expect(await service.getActiveEmail(), 'secondary@gmail.com');
+    });
+
+    testWidgets('smart Local LLM fallback when pasting unparsed email text',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      bool aiParserCalled = false;
+      final aiResult = ParsedSms(
+        amount: 3450.0,
+        merchant: 'AIRBNB BOOKING',
+        paymentType: 'HDFC Card 8888',
+        date: DateTime(2026, 10, 14),
+        direction: TxnDirection.debit,
+        reference: 'AI-REF-1234',
+        templateId: 'ai-llm-local',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EmailTransactionsScreen(
+            categories: categories,
+            merchants: merchants,
+            paymentTypes: paymentTypes,
+            transactions: const <ExpenseTxn>[],
+            onChanged: () async {},
+            aiModelAvailableOverride: true,
+            aiParserOverride: (text, {receivedAt}) async {
+              aiParserCalled = true;
+              return aiResult;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap Paste Email Text
+      await tester.tap(find.text('Paste Email Text'));
+      await tester.pumpAndSettle();
+
+      // Enter custom unparsed email text
+      await tester.enterText(
+        find.widgetWithText(TextField, 'e.g. Thank you for using your HDFC Bank Credit Card ending in 1234 for INR 1,500.00 at AMAZON...'),
+        'Dear Customer, reservation of INR 3,450.00 was approved for AIRBNB BOOKING via card 8888.',
+      );
+      await tester.pumpAndSettle();
+
+      // Tap Parse & Verify
+      await tester.tap(find.text('Parse & Verify'));
+      await tester.pumpAndSettle();
+
+      expect(aiParserCalled, isTrue);
+      // Verify navigated to AddTransactionScreen with AI parsed fields
+      expect(find.byType(AddTransactionScreen), findsOneWidget);
+      expect(find.text('3450.00'), findsOneWidget);
+      expect(find.text('AIRBNB BOOKING'), findsOneWidget);
+      expect(find.text('HDFC Card 8888'), findsOneWidget);
+      expect(find.text('Ref: AI-REF-1234'), findsOneWidget);
+    });
+
+    testWidgets('smart Local LLM fallback when tapping unparsed email item in list',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final fake = FakeEmailAdapter();
+      final service = EmailService.instance;
+      service.setAdapterForTesting(fake);
+      await service.clearCredentials();
+      await service.saveAccount('user@gmail.com', 'pass1234');
+
+      final emailDate = DateTime(2026, 10, 12, 14, 30);
+      fake.cannedEmails = <EmailMessageItem>[
+        EmailMessageItem(
+          id: 'unparsed_email_1',
+          subject: 'Custom Bank Notification',
+          from: 'notifications@neobank.com',
+          date: emailDate,
+          body: 'Order notification: Total INR 850.00 charged. Thank you for your business with STARBUCKS COFFEE.',
+          parsed: null, // Regex failed or did not match
+        ),
+      ];
+
+      bool aiParserCalled = false;
+      final aiResult = ParsedSms(
+        amount: 850.0,
+        merchant: 'STARBUCKS COFFEE',
+        paymentType: 'NeoBank Card 9999',
+        date: emailDate,
+        direction: TxnDirection.debit,
+        reference: 'STAR-7711',
+        templateId: 'ai-llm-local',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EmailTransactionsScreen(
+            categories: categories,
+            merchants: merchants,
+            paymentTypes: paymentTypes,
+            transactions: const <ExpenseTxn>[],
+            onChanged: () async {},
+            aiModelAvailableOverride: true,
+            aiParserOverride: (text, {receivedAt}) async {
+              aiParserCalled = true;
+              return aiResult;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Custom Bank Notification'), findsOneWidget);
+
+      // Tap unparsed email card
+      await tester.tap(find.text('Custom Bank Notification'));
+      await tester.pumpAndSettle();
+
+      expect(aiParserCalled, isTrue);
+      expect(find.byType(AddTransactionScreen), findsOneWidget);
+      expect(find.text('850.00'), findsOneWidget);
+      expect(find.text('STARBUCKS COFFEE'), findsOneWidget);
+      expect(find.text('NeoBank Card 9999'), findsOneWidget);
+      expect(find.text('Ref: STAR-7711'), findsOneWidget);
     });
   });
 }

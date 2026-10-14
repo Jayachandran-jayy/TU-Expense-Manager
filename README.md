@@ -74,7 +74,8 @@ For unformatted or non-standard SMS messages where deterministic regex patterns 
 
 ### 5. ✉️ Email Transaction Support (Gmail IMAP & Manual Paste)
 Missing bank SMS alerts due to carrier network drops or telecom delivery issues? TU Expense Tracker bridges the gap with comprehensive email support:
-- **Direct Gmail Connect**: Connect via secure IMAP TLS (`imap.gmail.com:993`) using a standard 16-character Google App Password — no complicated Cloud Console OAuth setup required.
+- **Direct Gmail Connect & Multi-Account Support**: Connect via secure IMAP TLS (`imap.gmail.com:993`) using standard 16-character Google App Passwords. Supports multiple Gmail and Google Workspace accounts with a one-tap account switcher dropdown in the header card to seamlessly switch inboxes, add secondary accounts, or disconnect individual accounts.
+- **Smart On-Device AI Email Fallback**: When manually pasting email alert text or reviewing unparsed inbox emails, the app automatically leverages the local on-device LLM (`LocalLlmService.parseEmail`) when regex rules cannot detect complete transaction details, pre-filling `AddTransactionScreen` with 100% offline privacy.
 - **Smart Pre-Filtering**: Scans transaction emails across 7, 14, or 30 days lookback ranges using targeted keyword matching (`debited`, `spent`, `credited`, `received`, `card`, `a/c`).
 - **Selective Manual Verification (No Bulk Auto-Add)**: Browse emails in an intuitive list, search in real-time, and review parsed details in `AddTransactionScreen` before saving to your ledger.
 - **Precise Timing Preservation**: Extracts explicit transaction times from all major issuer email alerts (HDFC, ICICI, SBI, Axis, Yes, Kotak, IndusInd), and borrows the email message arrival timestamp when explicit times are absent, avoiding arbitrary 12:00 AM defaults.
@@ -356,7 +357,8 @@ The email pipeline (`lib/src/core/email_parser.dart` and `lib/src/mobile/service
 - **HTML Sanitization & Entity Decoding**: `EmailParser.stripHtml` strips markup and handles complex HTML entities including rupee symbols (`₹`, `&#8377;`, `&#x20B9;`), `&amp;`, and `&nbsp;`.
 - **Targeted Bank Templates**: Specialized regex matchers for HDFC Bank, ICICI Bank, SBI Card, Axis Bank, Yes Bank, Kotak Mahindra Bank, IndusInd Bank, and a comprehensive generic card alert fallback.
 - **Direction & Gateway Cleanup**: Direction (`debit` vs `credit`) is assigned from regex structure. Extracted merchants are cleaned via `cleanMerchantName`.
-- **Direct Gmail IMAP over TLS**: Securely connects to `imap.gmail.com:993` using a user-provided 16-character Google App Password. Pre-filters the inbox for financial keywords (`debited`, `spent`, `credited`, `received`, `txn`, `card`, `a/c`) across 7, 14, or 30 days lookback.
+- **Direct Gmail IMAP over TLS & Multi-Account Management**: Securely connects to `imap.gmail.com:993` using user-provided 16-character Google App Passwords. Supports configuring multiple accounts, switching the active account via a top dropdown sheet, and querying emails per account. Pre-filters the inbox for financial keywords (`debited`, `spent`, `credited`, `received`, `txn`, `card`, `a/c`) across 7, 14, or 30 days lookback.
+- **Smart Local LLM Fallback (`LocalLlmService.parseEmail`)**: In `EmailTransactionsScreen`, if an email cannot be matched by deterministic regex (or when pasting custom bank alert formats), the app automatically invokes the on-device model (`Qwen 2.5`) with a brief loading dialog to extract amounts, merchants, directions, and dates offline.
 - **Manual Verification First**: Never adds transactions in bulk. Selecting an email launches `AddTransactionScreen` pre-filled with the extracted amount, merchant, instrument, date, and direction for explicit user confirmation.
 - **Duplicate Detection & Dismissal**: Emails matching existing transactions in the ledger display an `Added` badge, and unwanted notifications can be permanently dismissed.
 

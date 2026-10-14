@@ -5,6 +5,7 @@ import '../../core/email_parser.dart';
 import '../../core/models.dart';
 import '../../core/parser.dart';
 import '../services/email_service.dart';
+import '../services/local_llm_service.dart';
 import 'add_transaction_screen.dart';
 
 /// Screen for managing email transactions: paste raw email text or fetch from Gmail IMAP,
@@ -17,6 +18,8 @@ class EmailTransactionsScreen extends StatefulWidget {
     required this.paymentTypes,
     required this.transactions,
     required this.onChanged,
+    this.aiParserOverride,
+    this.aiModelAvailableOverride,
   });
 
   final List<ExpenseCategory> categories;
@@ -24,6 +27,9 @@ class EmailTransactionsScreen extends StatefulWidget {
   final List<String> paymentTypes;
   final List<ExpenseTxn> transactions;
   final Future<void> Function() onChanged;
+  final Future<ParsedSms?> Function(String text, {DateTime? receivedAt})?
+      aiParserOverride;
+  final bool? aiModelAvailableOverride;
 
   @override
   State<EmailTransactionsScreen> createState() => _EmailTransactionsScreenState();
@@ -35,6 +41,7 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
 
   bool _isConfigured = false;
   String? _connectedEmail;
+  List<EmailAccount> _accounts = <EmailAccount>[];
   bool _loading = false;
   String? _errorMessage;
   int _selectedDays = 14;
@@ -57,13 +64,15 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
   }
 
   Future<void> _checkStatusAndLoad() async {
-    final configured = await _emailService.isConfigured();
-    final email = await _emailService.getSavedEmail();
+    final accounts = await _emailService.getAccounts();
+    final activeEmail = await _emailService.getActiveEmail();
+    final configured = accounts.isNotEmpty;
     if (!mounted) return;
 
     setState(() {
+      _accounts = accounts;
       _isConfigured = configured;
-      _connectedEmail = email;
+      _connectedEmail = activeEmail;
     });
 
     if (configured) {
@@ -78,7 +87,10 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
     });
 
     try {
-      final items = await _emailService.fetchEmails(days: _selectedDays);
+      final items = await _emailService.fetchEmails(
+        days: _selectedDays,
+        accountEmail: _connectedEmail,
+      );
       _markAlreadyAdded(items);
 
       if (!mounted) return;
@@ -123,8 +135,10 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
     }
   }
 
-  Future<void> _connectGmailDialog() async {
-    final emailCtrl = TextEditingController(text: _connectedEmail ?? '');
+  Future<void> _connectGmailDialog({String? initialEmail}) async {
+    final emailCtrl = TextEditingController(
+      text: initialEmail ?? (_accounts.isEmpty ? (_connectedEmail ?? '') : ''),
+    );
     final passCtrl = TextEditingController();
     bool obscurePass = true;
     bool saving = false;
@@ -222,7 +236,7 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
                         );
                         await _emailService.adapter.disconnect();
 
-                        await _emailService.saveCredentials(email, pass);
+                        await _emailService.saveAccount(email, pass);
                         if (!dialogCtx.mounted) return;
                         Navigator.pop(dialogCtx);
 
@@ -248,13 +262,147 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
     );
   }
 
-  Future<void> _disconnectGmail() async {
+  Future<void> _showAccountSwitcherSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    const Text(
+                      'Gmail Accounts',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    FilledButton.tonalIcon(
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add Account', style: TextStyle(fontSize: 12)),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        _connectGmailDialog();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _accounts.length,
+                  itemBuilder: (ctx, i) {
+                    final acc = _accounts[i];
+                    final isActive =
+                        acc.email.toLowerCase() == _connectedEmail?.toLowerCase();
+                    return ListTile(
+                      leading: Icon(
+                        isActive ? Icons.check_circle : Icons.mail_outline,
+                        color: isActive
+                            ? Colors.green
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      title: Text(
+                        acc.email,
+                        style: TextStyle(
+                          fontWeight:
+                              isActive ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      subtitle: isActive
+                          ? const Text(
+                              'Active account',
+                              style: TextStyle(color: Colors.green, fontSize: 11),
+                            )
+                          : null,
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        tooltip: 'Remove account',
+                        onPressed: () =>
+                            _confirmRemoveAccount(sheetCtx, acc.email),
+                      ),
+                      onTap: () async {
+                        if (!isActive) {
+                          await _emailService.setActiveEmail(acc.email);
+                          if (!mounted) return;
+                          setState(() {
+                            _connectedEmail = acc.email;
+                          });
+                          if (sheetCtx.mounted) {
+                            Navigator.pop(sheetCtx);
+                          }
+                          await _fetchEmails();
+                        } else {
+                          if (sheetCtx.mounted) {
+                            Navigator.pop(sheetCtx);
+                          }
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmRemoveAccount(BuildContext sheetCtx, String email) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Disconnect Gmail?'),
+        title: Text('Remove $email?'),
         content: const Text(
-          'Your saved credentials will be cleared from this device. You can connect again at any time.',
+          'This will remove this email account from the device. You can reconnect it at any time.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+    await _emailService.removeAccount(email);
+    if (!mounted) return;
+    if (sheetCtx.mounted) {
+      Navigator.pop(sheetCtx);
+    }
+    await _checkStatusAndLoad();
+  }
+
+  Future<void> _disconnectGmail() async {
+    final email = _connectedEmail;
+    final isMulti = _accounts.length > 1;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isMulti && email != null
+            ? 'Disconnect $email?'
+            : 'Disconnect Gmail?'),
+        content: Text(
+          isMulti
+              ? 'This account will be removed from this device.'
+              : 'Your saved credentials will be cleared from this device. You can connect again at any time.',
         ),
         actions: <Widget>[
           TextButton(
@@ -270,12 +418,12 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
     );
 
     if (confirm != true) return;
-    await _emailService.clearCredentials();
-    setState(() {
-      _isConfigured = false;
-      _connectedEmail = null;
-      _emails.clear();
-    });
+    if (isMulti && email != null) {
+      await _emailService.removeAccount(email);
+    } else {
+      await _emailService.clearCredentials();
+    }
+    await _checkStatusAndLoad();
   }
 
   Future<void> _pasteEmailDialog() async {
@@ -326,27 +474,81 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
 
   Future<void> _openVerification(String emailContent, [EmailMessageItem? item]) async {
     final fallbackDate = item?.date ?? DateTime.now();
-    final parsed = item?.parsed ??
-        EmailParser.parse(emailContent, fallbackDate: fallbackDate) ??
+    ParsedEmail? parsed = item?.parsed ??
+        EmailParser.parse(emailContent, fallbackDate: fallbackDate);
+
+    // Smart Local LLM fallback: if regex could not parse a valid transaction or amount <= 0,
+    // invoke the on-device AI model if available.
+    if (parsed == null || parsed.amount <= 0) {
+      final bool aiAvailable = widget.aiModelAvailableOverride ??
+          await LocalLlmService.instance.isModelAvailable();
+      if (aiAvailable) {
+        if (mounted) {
+          showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => const AlertDialog(
+              content: Row(
+                children: <Widget>[
+                  CircularProgressIndicator(),
+                  SizedBox(width: 20),
+                  Expanded(child: Text('Parsing with local AI...')),
+                ],
+              ),
+            ),
+          );
+        }
+
+        ParsedSms? aiParsed;
+        try {
+          final parser =
+              widget.aiParserOverride ?? LocalLlmService.instance.parseEmail;
+          aiParsed = await parser(emailContent, receivedAt: fallbackDate);
+        } catch (_) {}
+
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+
+        if (aiParsed != null && aiParsed.amount > 0) {
+          parsed = ParsedEmail(
+            amount: aiParsed.amount,
+            merchant: aiParsed.merchant,
+            paymentType: aiParsed.paymentType,
+            date: aiParsed.date,
+            direction: aiParsed.direction,
+            reference: aiParsed.reference,
+            bank: 'ai-llm-local',
+          );
+        }
+      }
+    }
+
+    final resolvedParsed = parsed ??
         ParsedEmail(
           amount: EmailParser.extractAmountOnly(emailContent) ?? 0.0,
-          paymentType: EmailParser.extractInstrumentOnly(emailContent) ?? 'Credit Card',
+          paymentType:
+              EmailParser.extractInstrumentOnly(emailContent) ?? 'Credit Card',
           merchant: EmailParser.extractMerchantOnly(emailContent) ?? '',
-          date: EmailParser.extractDateOnly(emailContent, fallbackDate: fallbackDate)?.date ?? fallbackDate,
+          date: EmailParser.extractDateOnly(emailContent,
+                      fallbackDate: fallbackDate)
+                  ?.date ??
+              fallbackDate,
           direction: TxnDirection.debit,
         );
 
-    final txnDate = (parsed.hasExplicitTime || item == null)
-        ? parsed.date
+    final txnDate = (resolvedParsed.hasExplicitTime || item == null)
+        ? resolvedParsed.date
         : DateTime(
-            parsed.date.year,
-            parsed.date.month,
-            parsed.date.day,
+            resolvedParsed.date.year,
+            resolvedParsed.date.month,
+            resolvedParsed.date.day,
             item.date.hour,
             item.date.minute,
             item.date.second,
           );
 
+    if (!mounted) return;
     final bool? added = await Navigator.push<bool>(
       context,
       MaterialPageRoute<bool>(
@@ -354,12 +556,19 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
           categories: widget.categories,
           merchants: widget.merchants,
           paymentTypes: widget.paymentTypes,
-          initialAmount: parsed.amount > 0 ? parsed.amount : null,
-          initialMerchant: parsed.merchant.isNotEmpty ? parsed.merchant : null,
-          initialPaymentType: parsed.paymentType.isNotEmpty ? parsed.paymentType : null,
+          initialAmount:
+              resolvedParsed.amount > 0 ? resolvedParsed.amount : null,
+          initialMerchant: resolvedParsed.merchant.isNotEmpty
+              ? resolvedParsed.merchant
+              : null,
+          initialPaymentType: resolvedParsed.paymentType.isNotEmpty
+              ? resolvedParsed.paymentType
+              : null,
           initialDate: txnDate,
-          initialNotes: parsed.reference.isNotEmpty ? 'Ref: ${parsed.reference}' : null,
-          initialDirection: parsed.direction,
+          initialNotes: resolvedParsed.reference.isNotEmpty
+              ? 'Ref: ${resolvedParsed.reference}'
+              : null,
+          initialDirection: resolvedParsed.direction,
         ),
       ),
     );
@@ -376,8 +585,8 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            parsed.merchant.isNotEmpty
-                ? 'Transaction added for ${parsed.merchant}'
+            resolvedParsed.merchant.isNotEmpty
+                ? 'Transaction added for ${resolvedParsed.merchant}'
                 : 'Transaction added from email',
           ),
         ),
@@ -485,15 +694,40 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
+                              if (_isConfigured)
+                                InkWell(
+                                  onTap: _showAccountSwitcherSheet,
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      Flexible(
+                                        child: Text(
+                                          'Connected: $_connectedEmail',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const Icon(Icons.arrow_drop_down, size: 18),
+                                    ],
+                                  ),
+                                )
+                              else
+                                const Text(
+                                  'Gmail Not Connected',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
                               Text(
                                 _isConfigured
-                                    ? 'Connected: $_connectedEmail'
-                                    : 'Gmail Not Connected',
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                              ),
-                              Text(
-                                _isConfigured
-                                    ? 'Tap refresh to fetch bank transaction alerts'
+                                    ? (_accounts.length > 1
+                                        ? '${_accounts.length} accounts connected · Tap to switch'
+                                        : 'Tap to switch account or add secondary email')
                                     : 'Connect using an App Password to list emails',
                                 style: TextStyle(
                                   fontSize: 11,
@@ -503,12 +737,18 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
                             ],
                           ),
                         ),
-                        if (_isConfigured)
+                        if (_isConfigured) ...<Widget>[
+                          if (_accounts.length > 1)
+                            IconButton(
+                              icon: const Icon(Icons.switch_account_outlined, size: 20),
+                              tooltip: 'Switch account',
+                              onPressed: _showAccountSwitcherSheet,
+                            ),
                           TextButton(
                             onPressed: _disconnectGmail,
                             child: const Text('Disconnect', style: TextStyle(fontSize: 12)),
-                          )
-                        else
+                          ),
+                        ] else
                           FilledButton.tonal(
                             onPressed: _connectGmailDialog,
                             child: const Text('Connect', style: TextStyle(fontSize: 12)),
