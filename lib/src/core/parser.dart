@@ -85,14 +85,18 @@ const String _cur = r'(?:INR|Rs\.?|₹)\s*';
 /// `122.02`, `39791.72`, `3,99,614.00` (Indian grouping), `150.0`, `500`.
 const String _amt = r'(?<amount>[\d,]+(?:\.\d{1,2})?)';
 
+/// Standard English month names (full or abbreviated 3/4-letter).
+const String _monthPattern =
+    r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+
 /// Every date shape seen across issuers, longest first so a shape carrying a
 /// time is never truncated to its bare date by an earlier alternative.
 /// `_parseDate` reports whether the match actually included a clock time.
 const String _date = r'(?<date>'
     r'\d{4}[-/.]\d{2}[-/.]\d{2}(?:[:\sT]+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 2026-08-13 07:19:26, 2026-08-13:07:19:26, 2026-08-13T07:19:26
     r'|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 13-08-2026 09:21:35 am, 13-08-2026, 10:29 am, 13.08.2026, 10/08/26
-    r'|\d{1,2}[- /.](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[- /.](?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 11-Aug-26 12:30 pm
-    r'|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+(?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // Sep 21, 2026 at 11:20:00
+    '|\\d{1,2}[- /.]' '$_monthPattern' r'[- /.](?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 11-Aug-26 12:30 pm
+    '|' '$_monthPattern' r'\s+\d{1,2},?\s+(?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // Sep 21, 2026 at 11:20:00
     r'|\d{1,2}[A-Za-z]{3}\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 11Aug26 12:30 pm
     r'|\d{1,2}[-/]\d{1,2}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 13-09 14:30, 13-09
     r')';
@@ -487,8 +491,18 @@ class SmsParser {
   }
 
   static const Map<String, int> _months = <String, int>{
-    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+    'jan': 1, 'january': 1,
+    'feb': 2, 'february': 2,
+    'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4,
+    'may': 5,
+    'jun': 6, 'june': 6,
+    'jul': 7, 'july': 7,
+    'aug': 8, 'august': 8,
+    'sep': 9, 'sept': 9, 'september': 9,
+    'oct': 10, 'october': 10,
+    'nov': 11, 'november': 11,
+    'dec': 12, 'december': 12,
   };
 
   /// `yyyy-MM-dd[: ]HH:mm[:ss]` with optional `T` or `:` or space
