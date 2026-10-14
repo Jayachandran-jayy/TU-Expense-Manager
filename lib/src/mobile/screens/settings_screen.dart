@@ -895,26 +895,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       width: double.infinity,
                       child: SegmentedButton<AppThemeMode>(
                         showSelectedIcon: false,
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          padding: WidgetStatePropertyAll<EdgeInsetsGeometry>(
+                            EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                          ),
+                        ),
                         segments: const <ButtonSegment<AppThemeMode>>[
                           ButtonSegment<AppThemeMode>(
                             value: AppThemeMode.system,
-                            icon: Icon(Icons.brightness_auto_outlined),
-                            label: Text('System'),
+                            label: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(Icons.brightness_auto_outlined, size: 20),
+                                SizedBox(height: 3),
+                                Text(
+                                  'System',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                ),
+                              ],
+                            ),
                           ),
                           ButtonSegment<AppThemeMode>(
                             value: AppThemeMode.light,
-                            icon: Icon(Icons.light_mode_outlined),
-                            label: Text('Light'),
+                            label: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(Icons.light_mode_outlined, size: 20),
+                                SizedBox(height: 3),
+                                Text(
+                                  'Light',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                ),
+                              ],
+                            ),
                           ),
                           ButtonSegment<AppThemeMode>(
                             value: AppThemeMode.dark,
-                            icon: Icon(Icons.dark_mode_outlined),
-                            label: Text('Dark'),
+                            label: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(Icons.dark_mode_outlined, size: 20),
+                                SizedBox(height: 3),
+                                Text(
+                                  'Dark',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                ),
+                              ],
+                            ),
                           ),
                           ButtonSegment<AppThemeMode>(
                             value: AppThemeMode.oled,
-                            icon: Icon(Icons.contrast),
-                            label: Text('OLED'),
+                            label: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Icon(Icons.contrast, size: 20),
+                                SizedBox(height: 3),
+                                Text(
+                                  'OLED',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                         selected: <AppThemeMode>{

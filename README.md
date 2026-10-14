@@ -68,7 +68,7 @@ For unformatted or non-standard SMS messages where deterministic regex patterns 
 - **Background Fallback**: When enabled in Settings, the AI automatically steps in when regular regex parsing fails during SMS scans.
 - **Scan Existing SMS for Review (`ScanReviewScreen`)**: Run a full inbox and unadded SMS scan on demand using both regex and on-device AI. Found transactions are presented in an interactive review checklist where you can toggle candidates, inspect raw SMS bodies, see cumulative totals, and batch-add them with one tap.
 - **Unified Paste Transaction Dialog (`PasteTransactionDialog`)**: Directly paste any bank SMS or email notification text from your clipboard. The system cascades through SMS patterns, email templates, and on-device AI to extract details and opens `AddTransactionScreen` pre-filled for rapid confirmation.
-- **✨ AI Quick Actions Sheet**: Quickly accessible via the ✨ icon in the Transactions toolbar whenever AI is available, giving instant access to Scan Existing SMS and Paste Transaction tools.
+- **✨ AI Quick Actions**: Accessible via the Transaction Actions bottom sheet (`Icons.grid_view_rounded`) in the Transactions toolbar whenever AI is available, giving instant access to Scan Existing SMS and Paste Transaction tools.
 - **Interactive Parsing from Inbox**: In the **Unadded SMS** inbox, tap the ✨ **Parse with on-device AI** button on any message to parse it and prefill `AddTransactionScreen` for instant review.
 - **In-App Management**: Download the Qwen 2.5 model with live progress or import your own GGUF weights, inspect storage usage, and toggle fallback anytime in Settings.
 
@@ -888,7 +888,7 @@ The settings destination on the navigation bar houses:
 
 ### Appearance & Themes
 
-- **Two-Tier Customization**: Choose your base theme mode (**System**, **Light**, **Dark**, or **OLED Black**) and customize your primary accent seed across 8 curated vibrant color palettes (**Classic Blue**, **Crimson Red**, **Emerald Green**, **Royal Purple**, **Sunset Orange**, **Rose Pink**, **Teal/Cyan**, and **Cyber Amber**).
+- **Two-Tier Customization**: Choose your base theme mode (**System**, **Light**, **Dark**, or **OLED Black**) via the vertical icon & label selector that prevents text wrapping on compact screens, and customize your primary accent seed across 8 curated vibrant color palettes (**Classic Blue**, **Crimson Red**, **Emerald Green**, **Royal Purple**, **Sunset Orange**, **Rose Pink**, **Teal/Cyan**, and **Cyber Amber**).
 - **Multi-Style Icon Packs & Smart Emojis**: Switch between **Vibrant Emojis** (playful colorful emoji avatars), **Minimalist Outlined** (clean monochrome outlined vector icons), and **Modern Filled** (sharp solid filled vector icons). Seeded and keyword-matched emojis automatically support essential categories including 🛒 Grocery, 🍔 Food, ⛽ Fuel, 🛍️ Shopping, 💡 Bills, ✈️ Travel, 🎬 Entertainment, 💊 Health, 💰 Income, 🏦 Loans/EMI, 🥚 Egg, and 🍗/🥩/🐟 Non-Veg/Meat/Fish, with dynamic legacy fallback upgrade for existing records.
 - **End-to-End Category Icon Synchronization**: Custom category icons assigned on the mobile app are preserved in JSON backup snapshots and accurately rendered across all web views (desktop transactions table category pills, facet dropdowns, breakdown chips, and dashboard category charts).
 - **OLED Pitch Black**: Built specifically for AMOLED/OLED displays to minimize battery consumption and eye strain, rendering true `#000000` pitch black scaffold and navigation bars with `#121418` obsidian elevated containers for clear card separation.

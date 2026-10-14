@@ -389,12 +389,15 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Tap Check for new SMS button on app bar
-      await tester.tap(find.byTooltip('Check for new SMS'));
+      // Tap Actions button on app bar, then tap Check for new SMS in the actions sheet
+      await tester.tap(find.byTooltip('Actions'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Check for new SMS'));
       await tester.pump();
 
       // Complete scan and dismiss modal
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.pump();
 
       expect(find.byType(LoadingModal), findsNothing);

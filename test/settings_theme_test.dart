@@ -93,4 +93,41 @@ void main() {
     app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.light);
   });
+
+  testWidgets(
+      'Theme mode selector renders vertical icon and text without overflow on narrow screen',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final controller = ThemeController.instance;
+    await controller.setThemeMode(AppThemeMode.system);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: controller.lightTheme,
+        home: const Scaffold(
+          body: SettingsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify icons and text are rendered
+    expect(find.byIcon(Icons.brightness_auto_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.light_mode_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.contrast), findsOneWidget);
+    expect(find.text('System'), findsOneWidget);
+    expect(find.text('Light'), findsOneWidget);
+    expect(find.text('Dark'), findsOneWidget);
+    expect(find.text('OLED'), findsOneWidget);
+
+    // Verify selecting dark works
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    expect(controller.appThemeMode, AppThemeMode.dark);
+  });
 }
+

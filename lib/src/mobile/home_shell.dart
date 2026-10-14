@@ -1159,6 +1159,23 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   /// [visible] is what the filters currently leave on screen. Select all means
   /// all of *those* — marking rows a filter has hidden would hand the delete
   /// button transactions the user cannot see.
+  void _openUnaddedSms() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => UnaddedSmsScreen(
+          categories: _categories,
+          merchants: _derive().merchants,
+          paymentTypes: _derive().paymentTypes,
+          onChanged: () => Future.wait(<Future<void>>[
+            _fetchUnadded(),
+            _load(),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _inboxAction() {
     final int unread = _unaddedSms.where((UnaddedSms m) => !m.isRead).length;
     return Stack(
@@ -1167,25 +1184,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         IconButton(
           icon: const Icon(Icons.inbox),
           tooltip: 'Unadded SMS',
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => UnaddedSmsScreen(
-                categories: _categories,
-                merchants: _derive().merchants,
-                paymentTypes: _derive().paymentTypes,
-                // Covers every reason this screen calls back: a dismiss or a
-                // mark-all-read only touch the inbox, but adding a message as
-                // a transaction changes the ledger too — and there is no way
-                // to tell which happened from out here, so both are always
-                // refreshed together.
-                onChanged: () => Future.wait(<Future<void>>[
-                  _fetchUnadded(),
-                  _load(),
-                ]),
-              ),
-            ),
-          ),
+          onPressed: _openUnaddedSms,
         ),
         if (unread > 0)
           Positioned(
@@ -1236,71 +1235,140 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _openTransactionActionsSheet() async {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final int unread = _unaddedSms.where((UnaddedSms m) => !m.isRead).length;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.grid_view_rounded, color: colorScheme.primary),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Transaction actions',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.sms_outlined),
+                  title: const Text('Check for new SMS'),
+                  trailing: _scanning
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _scanFromToolbar();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.inbox_outlined),
+                  title: const Text('Unadded SMS'),
+                  trailing: unread > 0
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.error,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '$unread',
+                            style: TextStyle(
+                              color: colorScheme.onError,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        )
+                      : null,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _openUnaddedSms();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.mail_outline),
+                  title: const Text('Email transactions'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _openEmailTransactions();
+                  },
+                ),
+                if (_isAiModelAvailable)
+                  ListTile(
+                    leading: const Icon(Icons.auto_awesome),
+                    title: const Text('AI tools'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _openAiToolsSheet();
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.content_paste_outlined),
+                  title: const Text('Paste transaction'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _openPasteTransaction();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('Deleted transactions'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _openDeleted();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.refresh_outlined),
+                  title: const Text('Rescan all messages'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _scanFromToolbar(full: true);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   AppBar _normalAppBar() {
     return AppBar(
       title: const Text('Transactions'),
       actions: <Widget>[
         IconButton(
-          tooltip: 'Email transactions',
-          onPressed: _openEmailTransactions,
-          icon: const Icon(Icons.mail_outline),
-        ),
-        if (_isAiModelAvailable)
-          IconButton(
-            tooltip: 'AI tools',
-            onPressed: _openAiToolsSheet,
-            icon: const Icon(Icons.auto_awesome),
-          ),
-        _inboxAction(),
-        if (_scanning)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          )
-        else
-          IconButton(
-            tooltip: 'Check for new SMS',
-            onPressed: () => _scanFromToolbar(),
-            icon: const Icon(Icons.sms_outlined),
-          ),
-        PopupMenuButton<String>(
-          onSelected: (String value) {
-            switch (value) {
-              case 'email_transactions':
-                _openEmailTransactions();
-              case 'paste_sms':
-              case 'paste_transaction':
-                _openPasteTransaction();
-              case 'rescan':
-                _scanFromToolbar(full: true);
-              case 'deleted':
-                _openDeleted();
-            }
-          },
-          itemBuilder: (_) => const <PopupMenuEntry<String>>[
-            PopupMenuItem<String>(
-              value: 'email_transactions',
-              child: Text('Email transactions'),
-            ),
-            PopupMenuItem<String>(
-              value: 'paste_transaction',
-              child: Text('Paste transaction'),
-            ),
-            PopupMenuItem<String>(
-              value: 'deleted',
-              child: Text('Deleted transactions'),
-            ),
-            PopupMenuItem<String>(
-              value: 'rescan',
-              child: Text('Rescan all messages'),
-            ),
-          ],
+          tooltip: 'Actions',
+          icon: const Icon(Icons.grid_view_rounded),
+          onPressed: _openTransactionActionsSheet,
         ),
         _connectionDot(),
       ],
