@@ -43,14 +43,20 @@ void main() {
     expect(find.text('Theme mode'), findsOneWidget);
     expect(find.text('Accent color'), findsOneWidget);
 
-    // Verify theme mode segments
+    // Verify initial theme mode value (System is selected)
     expect(find.text('System'), findsOneWidget);
+
+    // Tap theme mode dropdown to open options
+    await tester.tap(find.text('System'));
+    await tester.pumpAndSettle();
+
+    // Verify theme mode options in menu
     expect(find.text('Light'), findsOneWidget);
     expect(find.text('Dark'), findsOneWidget);
-    expect(find.text('OLED'), findsOneWidget);
+    expect(find.text('OLED Black'), findsOneWidget);
 
-    // Tap OLED segment
-    await tester.tap(find.text('OLED'));
+    // Tap OLED Black option
+    await tester.tap(find.text('OLED Black').last);
     await tester.pumpAndSettle();
 
     expect(controller.appThemeMode, AppThemeMode.oled);
@@ -95,7 +101,7 @@ void main() {
   });
 
   testWidgets(
-      'Theme mode selector renders vertical icon and text without overflow on narrow screen',
+      'Theme mode dropdown renders and functions without overflow on narrow screen',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -114,18 +120,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verify icons and text are rendered
+    // Verify initial selected icon and text are rendered in the dropdown
     expect(find.byIcon(Icons.brightness_auto_outlined), findsOneWidget);
+    expect(find.text('System'), findsOneWidget);
+
+    // Open dropdown menu
+    await tester.tap(find.text('System'));
+    await tester.pumpAndSettle();
+
+    // Verify all mode options are rendered in the menu
     expect(find.byIcon(Icons.light_mode_outlined), findsOneWidget);
     expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
     expect(find.byIcon(Icons.contrast), findsOneWidget);
-    expect(find.text('System'), findsOneWidget);
     expect(find.text('Light'), findsOneWidget);
     expect(find.text('Dark'), findsOneWidget);
-    expect(find.text('OLED'), findsOneWidget);
+    expect(find.text('OLED Black'), findsOneWidget);
 
     // Verify selecting dark works
-    await tester.tap(find.text('Dark'));
+    await tester.tap(find.text('Dark').last);
     await tester.pumpAndSettle();
     expect(controller.appThemeMode, AppThemeMode.dark);
   });

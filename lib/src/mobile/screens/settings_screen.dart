@@ -891,89 +891,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: SegmentedButton<AppThemeMode>(
-                        showSelectedIcon: false,
-                        style: const ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                          padding: WidgetStatePropertyAll<EdgeInsetsGeometry>(
-                            EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-                          ),
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        segments: const <ButtonSegment<AppThemeMode>>[
-                          ButtonSegment<AppThemeMode>(
-                            value: AppThemeMode.system,
-                            label: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                Icon(Icons.brightness_auto_outlined, size: 20),
-                                SizedBox(height: 3),
-                                Text(
-                                  'System',
-                                  maxLines: 1,
-                                  softWrap: false,
-                                ),
-                              ],
-                            ),
-                          ),
-                          ButtonSegment<AppThemeMode>(
-                            value: AppThemeMode.light,
-                            label: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                Icon(Icons.light_mode_outlined, size: 20),
-                                SizedBox(height: 3),
-                                Text(
-                                  'Light',
-                                  maxLines: 1,
-                                  softWrap: false,
-                                ),
-                              ],
-                            ),
-                          ),
-                          ButtonSegment<AppThemeMode>(
-                            value: AppThemeMode.dark,
-                            label: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                Icon(Icons.dark_mode_outlined, size: 20),
-                                SizedBox(height: 3),
-                                Text(
-                                  'Dark',
-                                  maxLines: 1,
-                                  softWrap: false,
-                                ),
-                              ],
-                            ),
-                          ),
-                          ButtonSegment<AppThemeMode>(
-                            value: AppThemeMode.oled,
-                            label: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                Icon(Icons.contrast, size: 20),
-                                SizedBox(height: 3),
-                                Text(
-                                  'OLED',
-                                  maxLines: 1,
-                                  softWrap: false,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        selected: <AppThemeMode>{
-                          ThemeController.instance.appThemeMode,
-                        },
-                        onSelectionChanged: (Set<AppThemeMode> selection) {
-                          if (selection.isNotEmpty) {
-                            ThemeController.instance.setThemeMode(
-                              selection.first,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<AppThemeMode>(
+                          value: ThemeController.instance.appThemeMode,
+                          isExpanded: true,
+                          selectedItemBuilder: (BuildContext context) {
+                            return AppThemeMode.values.map((AppThemeMode mode) {
+                              return Row(
+                                children: <Widget>[
+                                  Icon(mode.icon, size: 20),
+                                  const SizedBox(width: 12),
+                                  Text(mode.label),
+                                ],
+                              );
+                            }).toList();
+                          },
+                          items: AppThemeMode.values.map((AppThemeMode mode) {
+                            final bool isSelected =
+                                ThemeController.instance.appThemeMode == mode;
+                            return DropdownMenuItem<AppThemeMode>(
+                              value: mode,
+                              child: Row(
+                                children: <Widget>[
+                                  Icon(
+                                    mode.icon,
+                                    size: 20,
+                                    color: isSelected
+                                        ? theme.colorScheme.primary
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    mode.label,
+                                    style: isSelected
+                                        ? TextStyle(
+                                            color: theme.colorScheme.primary,
+                                            fontWeight: FontWeight.w600,
+                                          )
+                                        : null,
+                                  ),
+                                  const Spacer(),
+                                  if (isSelected)
+                                    Icon(
+                                      Icons.check,
+                                      size: 18,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                ],
+                              ),
                             );
-                            setState(() {});
-                          }
-                        },
+                          }).toList(),
+                          onChanged: (AppThemeMode? mode) {
+                            if (mode != null) {
+                              ThemeController.instance.setThemeMode(mode);
+                              setState(() {});
+                            }
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
