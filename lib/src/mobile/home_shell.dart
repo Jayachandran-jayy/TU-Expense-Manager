@@ -380,11 +380,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final since = await _db.lastScannedSmsDate();
     final _ScanResult? result;
     if (since == null && mounted) {
-      result = await withLoadingModal<_ScanResult?>(
+      result = await withProgressModal<_ScanResult?>(
         context: context,
         message: 'Importing SMS transactions…',
-        subtitle: 'Scanning your inbox for bank alerts…',
-        task: () => _scan(since: null),
+        subtitle: 'Reading inbox messages…',
+        task: (progress) => _scan(since: null, progress: progress),
       );
     } else {
       result = await _scan(since: since);
@@ -398,7 +398,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   /// One pass over the inbox. The caller owns the permission check. Returns
   /// null when a scan is already in flight.
-  Future<_ScanResult?> _scan({DateTime? since}) => _serializeSms(() async {
+  Future<_ScanResult?> _scan({DateTime? since, ProgressController? progress}) =>
+      _serializeSms(() async {
     if (_scanning) return null;
     setState(() => _scanning = true);
     try {
@@ -411,7 +412,17 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       // show. A full rescan mostly imports older months, and "Imported 214"
       // over an unchanged list is alarming rather than informative.
       var addedInView = 0;
-      for (final sms in messages) {
+      final total = messages.length;
+      if (total > 0) {
+        progress?.update(
+          current: 0,
+          total: total,
+          subtitle: 'Scanning messages…',
+        );
+      }
+
+      for (var i = 0; i < messages.length; i++) {
+        final sms = messages[i];
         final at = sms.receivedAt;
         if (at != null && (newest == null || at.isAfter(newest))) newest = at;
 
@@ -420,11 +431,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           if (SmsParser.looksLikeTransaction(sms.body)) {
             await _db.addUnaddedSms(sms.body, at ?? DateTime.now());
           }
+          progress?.update(current: i + 1, total: total);
           continue;
         }
         final id = await _db.insertParsed(parsed);
         if (id == 0) {
           skipped++;
+          progress?.update(current: i + 1, total: total);
           continue;
         }
         added++;
@@ -432,6 +445,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             _filters.months.contains(YearMonth.fromDate(parsed.date))) {
           addedInView++;
         }
+        progress?.update(current: i + 1, total: total);
       }
 
       // Advance from the newest message actually seen rather than from the
@@ -491,11 +505,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final since = full ? null : await _db.lastScannedSmsDate();
     final _ScanResult? result;
     if (mounted) {
-      result = await withLoadingModal<_ScanResult?>(
+      result = await withProgressModal<_ScanResult?>(
         context: context,
         message: full ? 'Rescanning all SMS messages…' : 'Checking for new SMS…',
-        subtitle: full ? 'Re-parsing your entire inbox…' : 'Scanning recent messages…',
-        task: () => _scan(since: since),
+        subtitle: 'Reading inbox messages…',
+        task: (progress) => _scan(since: since, progress: progress),
       );
     } else {
       result = await _scan(since: since);
@@ -957,18 +971,29 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
     final candidates = <CandidateTransaction>[];
 
-    await withLoadingModal<void>(
+    await withProgressModal<void>(
       context: context,
       message: 'Scanning SMS for transactions…',
       subtitle: aiAvailable
           ? 'Evaluating via patterns & on-device AI'
           : 'Evaluating via patterns',
-      task: () async {
+      task: (progress) async {
         final seenKeys = <String>{};
 
         // 1. Gather unadded SMS from database
         final unaddedList = await _db.unaddedSms();
-        for (final msg in unaddedList) {
+        if (unaddedList.isNotEmpty) {
+          progress.update(
+            message: 'Evaluating stored SMS…',
+            subtitle: aiAvailable
+                ? 'Evaluating via patterns & on-device AI'
+                : 'Evaluating via patterns',
+            current: 0,
+            total: unaddedList.length,
+          );
+        }
+        for (var i = 0; i < unaddedList.length; i++) {
+          final msg = unaddedList[i];
           ParsedSms? parsed =
               SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
           if (parsed == null && aiAvailable) {
@@ -995,14 +1020,35 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               );
             }
           }
+          progress.update(
+            current: i + 1,
+            total: unaddedList.length,
+          );
         }
 
         // 2. Gather telephony inbox if supported
         if (_sms.isSupported) {
           final hasPerm = await _sms.requestPermission();
           if (hasPerm) {
+            progress.update(
+              message: 'Reading inbox messages…',
+              subtitle: null,
+              current: 0,
+              total: 0,
+            );
             final inbox = await _sms.readInbox();
-            for (final msg in inbox) {
+            if (inbox.isNotEmpty) {
+              progress.update(
+                message: 'Evaluating inbox SMS…',
+                subtitle: aiAvailable
+                    ? 'Evaluating via patterns & on-device AI'
+                    : 'Evaluating via patterns',
+                current: 0,
+                total: inbox.length,
+              );
+            }
+            for (var i = 0; i < inbox.length; i++) {
+              final msg = inbox[i];
               ParsedSms? parsed =
                   SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
               if (parsed == null && aiAvailable) {
@@ -1028,6 +1074,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                   );
                 }
               }
+              progress.update(
+                current: i + 1,
+                total: inbox.length,
+              );
             }
           }
         }
