@@ -116,16 +116,19 @@ class _AnimatedCoinState extends State<AnimatedCoin>
   }
 }
 
-/// A capsule-shaped progress bar with an animated shimmering gradient sweep.
+/// A capsule-shaped progress bar with an animated shimmering gradient sweep,
+/// or a filled determinate bar when [value] is provided.
 class CoinProgressBar extends StatefulWidget {
   const CoinProgressBar({
     super.key,
     this.height = 10,
     this.width = 200,
+    this.value,
   });
 
   final double height;
   final double width;
+  final double? value;
 
   @override
   State<CoinProgressBar> createState() => _CoinProgressBarState();
@@ -136,7 +139,25 @@ class _CoinProgressBarState extends State<CoinProgressBar>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1400),
-  )..repeat();
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.value == null) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(CoinProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != null && _controller.isAnimating) {
+      _controller.stop();
+    } else if (widget.value == null && !_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -148,6 +169,50 @@ class _CoinProgressBarState extends State<CoinProgressBar>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark
+        ? theme.colorScheme.surfaceContainerHighest
+        : const Color(0xFFE8ECEF);
+
+    final double? value = widget.value;
+    if (value != null) {
+      final double clamped = value.clamp(0.0, 1.0);
+      return SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(widget.height / 2),
+          child: Container(
+            color: backgroundColor,
+            child: TweenAnimationBuilder<double>(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              tween: Tween<double>(begin: 0, end: clamped),
+              builder: (BuildContext context, double factor, Widget? child) {
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: factor,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: <Color>[
+                            theme.colorScheme.primary,
+                            const Color(0xFFFFC72C),
+                            theme.colorScheme.primary,
+                          ],
+                        ),
+                        borderRadius:
+                            BorderRadius.circular(widget.height / 2),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
       width: widget.width,
@@ -158,9 +223,7 @@ class _CoinProgressBarState extends State<CoinProgressBar>
           animation: _controller,
           builder: (BuildContext context, Widget? child) {
             return Container(
-              color: isDark
-                  ? theme.colorScheme.surfaceContainerHighest
-                  : const Color(0xFFE8ECEF),
+              color: backgroundColor,
               child: Stack(
                 children: <Widget>[
                   Positioned.fill(
@@ -282,6 +345,172 @@ Future<T> withLoadingModal<T>({
 
   try {
     return await task();
+  } finally {
+    if (dialogOpen && context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+}
+
+/// Tracks progress for operations with a known or evolving total count.
+class ProgressController extends ChangeNotifier {
+  ProgressController({
+    this.current = 0,
+    this.total = 0,
+    this.message,
+    this.subtitle,
+  });
+
+  int current;
+  int total;
+  String? message;
+  String? subtitle;
+
+  double? get progress =>
+      total > 0 ? (current / total).clamp(0.0, 1.0) : null;
+
+  void update({
+    int? current,
+    int? total,
+    String? message,
+    String? subtitle,
+  }) {
+    var changed = false;
+    if (current != null && current != this.current) {
+      this.current = current;
+      changed = true;
+    }
+    if (total != null && total != this.total) {
+      this.total = total;
+      changed = true;
+    }
+    if (message != null && message != this.message) {
+      this.message = message;
+      changed = true;
+    }
+    if (subtitle != null && subtitle != this.subtitle) {
+      this.subtitle = subtitle;
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+}
+
+/// A modal dialog that listens to a [ProgressController] and displays determinate
+/// or indeterminate loading progress alongside an [AnimatedCoin].
+class ProgressModal extends StatelessWidget {
+  const ProgressModal({
+    super.key,
+    required this.controller,
+    required this.initialMessage,
+    this.initialSubtitle,
+    this.symbol = '₹',
+  });
+
+  final ProgressController controller;
+  final String initialMessage;
+  final String? initialSubtitle;
+  final String symbol;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (BuildContext context, Widget? child) {
+        final message = controller.message ?? initialMessage;
+        final subtitle = controller.subtitle ?? initialSubtitle;
+        final total = controller.total;
+        final current = controller.current;
+        final double? progress = controller.progress;
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              AnimatedCoin(symbol: symbol, size: 56),
+              const SizedBox(height: 20),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (subtitle != null) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              CoinProgressBar(
+                height: 8,
+                width: 200,
+                value: progress,
+              ),
+              if (total > 0) ...<Widget>[
+                const SizedBox(height: 10),
+                Text(
+                  '$current / $total SMS scanned (${((progress ?? 0) * 100).toInt()}%)',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Executes [task] while displaying a non-dismissible [ProgressModal].
+///
+/// Guaranteed to dismiss cleanly upon task completion or error.
+Future<T> withProgressModal<T>({
+  required BuildContext context,
+  required String message,
+  String? subtitle,
+  String symbol = '₹',
+  required Future<T> Function(ProgressController progress) task,
+}) async {
+  if (!context.mounted) {
+    final controller = ProgressController(message: message, subtitle: subtitle);
+    return await task(controller);
+  }
+
+  final controller = ProgressController(message: message, subtitle: subtitle);
+  var dialogOpen = true;
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    useRootNavigator: true,
+    builder: (BuildContext dialogContext) => PopScope(
+      canPop: false,
+      child: ProgressModal(
+        controller: controller,
+        initialMessage: message,
+        initialSubtitle: subtitle,
+        symbol: symbol,
+      ),
+    ),
+  ).then((_) {
+    dialogOpen = false;
+  });
+
+  try {
+    return await task(controller);
   } finally {
     if (dialogOpen && context.mounted) {
       Navigator.of(context, rootNavigator: true).pop();

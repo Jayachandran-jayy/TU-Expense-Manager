@@ -340,7 +340,7 @@ void main() {
       expect(find.text('AMAZON'), findsOneWidget);
     }));
 
-    testWidgets('initial launch scan displays LoadingModal and dismisses cleanly',
+    testWidgets('initial launch scan displays progress modal and dismisses cleanly',
         (WidgetTester tester) async => withClock(Clock.fixed(DateTime(2026, 8, 25)), () async {
       setLargeViewport(tester);
 
@@ -365,11 +365,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump();
 
+      expect(find.byType(ProgressModal), findsNothing);
       expect(find.byType(LoadingModal), findsNothing);
       expect((await db.transactions()).length, 1);
     }));
 
-    testWidgets('toolbar rescan triggers LoadingModal and dismisses cleanly',
+    testWidgets('toolbar rescan triggers progress modal and dismisses cleanly',
         (WidgetTester tester) async => withClock(Clock.fixed(DateTime(2026, 8, 25)), () async {
       setLargeViewport(tester);
 
@@ -400,6 +401,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump();
 
+      expect(find.byType(ProgressModal), findsNothing);
       expect(find.byType(LoadingModal), findsNothing);
     }));
 

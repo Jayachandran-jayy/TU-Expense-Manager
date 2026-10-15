@@ -42,6 +42,22 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pump(const Duration(milliseconds: 800));
     });
+
+    testWidgets('renders determinate value smoothly',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: CoinProgressBar(height: 10, width: 220, value: 0.5),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(CoinProgressBar), findsOneWidget);
+      await tester.pumpAndSettle();
+    });
   });
 
   group('LoadingModal', () {
@@ -166,6 +182,109 @@ void main() {
 
       expect(find.byType(LoadingModal), findsNothing);
       expect(caughtError, contains('Network failed'));
+    });
+  });
+
+  group('ProgressController', () {
+    test('calculates progress and fires listeners on updates', () {
+      final controller = ProgressController(message: 'Starting…');
+      expect(controller.progress, isNull);
+      expect(controller.current, 0);
+      expect(controller.total, 0);
+
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      controller.update(total: 100, current: 25, message: 'Scanning…');
+      expect(notifications, 1);
+      expect(controller.progress, 0.25);
+      expect(controller.current, 25);
+      expect(controller.total, 100);
+      expect(controller.message, 'Scanning…');
+
+      // Redundant update does not fire listeners
+      controller.update(total: 100, current: 25);
+      expect(notifications, 1);
+    });
+  });
+
+  group('ProgressModal', () {
+    testWidgets('renders message, indeterminate bar initially, and counter when total > 0',
+        (WidgetTester tester) async {
+      final controller = ProgressController(
+        message: 'Importing SMS transactions…',
+        subtitle: 'Reading inbox messages…',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProgressModal(
+              controller: controller,
+              initialMessage: 'Importing SMS transactions…',
+              initialSubtitle: 'Reading inbox messages…',
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Importing SMS transactions…'), findsOneWidget);
+      expect(find.text('Reading inbox messages…'), findsOneWidget);
+      expect(find.textContaining('SMS scanned'), findsNothing);
+
+      // Update with message counts
+      controller.update(
+        current: 45,
+        total: 100,
+        subtitle: 'Scanning messages…',
+      );
+      await tester.pump();
+
+      expect(find.text('45 / 100 SMS scanned (45%)'), findsOneWidget);
+      expect(find.text('Scanning messages…'), findsOneWidget);
+    });
+  });
+
+  group('withProgressModal', () {
+    testWidgets('runs task, receives ProgressController, and dismisses on completion',
+        (WidgetTester tester) async {
+      ProgressController? taskController;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (BuildContext context) => ElevatedButton(
+                onPressed: () async {
+                  await withProgressModal<void>(
+                    context: context,
+                    message: 'Scanning…',
+                    task: (progress) async {
+                      taskController = progress;
+                      progress.update(total: 200, current: 50);
+                      await Future<void>.delayed(
+                          const Duration(milliseconds: 100));
+                    },
+                  );
+                },
+                child: const Text('Start Scan'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Start Scan'));
+      await tester.pump();
+
+      expect(find.byType(ProgressModal), findsOneWidget);
+      expect(find.text('50 / 200 SMS scanned (25%)'), findsOneWidget);
+      expect(taskController, isNotNull);
+
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pump();
+
+      expect(find.byType(ProgressModal), findsNothing);
     });
   });
 }
