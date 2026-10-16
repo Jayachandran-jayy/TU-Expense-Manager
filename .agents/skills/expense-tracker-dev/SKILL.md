@@ -151,7 +151,21 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
   - **AI Quick Action Toolbar Sheet (`HomeShell._openAiToolsSheet`)**:
     - Accessible directly via the Transaction Actions bottom sheet (`Icons.grid_view_rounded`) when AI is available.
     - Presents a clean modal bottom sheet with one-tap access to "Scan existing SMS" (launches review flow) and "Paste transaction" (opens unified paste modal).
-  - **CI & Test Suite Safety**: Platform checks (`Platform.isAndroid`) and `getActiveModelPath()` guard against invoking native `llama.cpp` bindings during non-Android execution. Unit tests (`test/local_llm_service_test.dart`, `test/scan_review_test.dart`, `test/paste_transaction_test.dart`) test prompt generation, JSON extraction, scan review selection/commit, and paste dialog workflows in milliseconds without requiring native binaries or weight downloads.
+  - **On-Device RAG Prompt Augmentation (`LocalRagRetriever`, `lib/src/core/rag_exemplars.dart`)**:
+    - **100% Offline Code-Baked Knowledge Bank**: Zero cloud database queries. Curated bank exemplars (`RagExemplars.curated`) are baked directly into compiled Dart code and shipped with app updates, ensuring 0ms retrieval latency and complete offline privacy.
+    - **Dynamic Context Injection**: Extracts bank signatures and transaction tokens from incoming unparsed SMS/email to select the top 2 best-matching exemplars. Simultaneously queries local SQLite for top recent merchants and saved accounts (`payment_methods`) to inject into the LLM prompt, keeping the entire prompt strictly under 500 tokens (well within the 1024 token limit).
+  - **Deterministic PII Sanitizer (`lib/src/core/pii_sanitizer.dart`, `PiiSanitizer`)**:
+    - Pure Dart, zero external dependencies.
+    - Automatically masks sensitive account numbers (`*XXXX`), account balances (`[MASKED]`), reference/UTR/RRN numbers (`[MASKED]`), phone numbers (`[PHONE]`), OTP codes (`[OTP]`), and email addresses before any contribution preview is generated.
+  - **1-Tap GitHub Community Contribution Pipeline (`ContributeSampleDialog`, `GitHubContributionHelper`)**:
+    - **Zero Cloud Infrastructure**: Voluntary contributions leverage the project's public GitHub repository via pre-filled issue URLs with encoded Markdown templates and issue labels (`dataset-contribution,ai-rag`).
+    - **In-App 3-Step Guide**: Interactive modal sheet provides an easy 3-step guide: 1) Inspect Redactions, 2) 1-Tap Submit (copies to clipboard and opens browser), and 3) Submit on GitHub, alongside a direct clickable link to the GitHub README contribution guide.
+    - Accessible directly via Unadded SMS cards (🤝 button) and Settings ("Contribute a bank SMS format").
+  - **Python Training & LoRA Fine-Tuning Toolkit (`tool/train/`)**:
+    - `curate_exemplars.py`: Automated curation script turning accepted community contributions into Dart source code for `rag_exemplars.dart`.
+    - `fine_tune_qwen.py`: LoRA fine-tuning script on `Qwen/Qwen2.5-0.5B-Instruct` using Hugging Face `SFTTrainer`.
+    - `export_gguf.py`: Script and instructions for converting fine-tuned weights to GGUF and quantizing to `q4_k_m.gguf` via `llama.cpp`.
+  - **CI & Test Suite Safety**: Platform checks (`Platform.isAndroid`) and `getActiveModelPath()` guard against invoking native `llama.cpp` bindings during non-Android execution. Unit tests (`test/local_llm_service_test.dart`, `test/scan_review_test.dart`, `test/paste_transaction_test.dart`, `test/pii_sanitizer_test.dart`, `test/rag_exemplars_test.dart`, `test/local_rag_retriever_test.dart`, `test/github_contribution_test.dart`, `test/contribute_dialog_test.dart`) test prompt generation, JSON extraction, scan review selection/commit, PII masking, RAG retrieval, GitHub URL construction, and contribution dialog workflows in milliseconds without requiring native binaries or weight downloads.
 - **On-Device App Lock & Privacy Subsystem (`lib/src/mobile/services/app_lock_service.dart`, `AppLockWrapper`, `AppLockScreen`, `local_auth`)**:
   - **Biometrics & Device Screen Lock Fallback**: Leverages `local_auth: ^2.3.0` (`biometricOnly: false`) to authenticate via fingerprint, face recognition, or native screen lock credentials (PIN/pattern/password).
   - **FragmentActivity Requirement**: Android `MainActivity.kt` extends `FlutterFragmentActivity` to host `BiometricPrompt` safely without platform exceptions.

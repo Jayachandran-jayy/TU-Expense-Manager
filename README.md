@@ -65,12 +65,34 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 For unformatted or non-standard SMS messages where deterministic regex patterns fail, TU Expense Tracker includes an optional, privacy-respecting on-device AI assistant powered by `llama.cpp` and Qwen 2.5 (0.5B Instruct):
 - **100% Offline & Private**: Runs directly on your device CPU. No API keys, no internet connection required for parsing, and zero financial telemetry leaves your phone.
 - **Zero APK Bloat (F-Droid Compliant)**: Model weights are never bundled into the APK to keep the app lightweight (~25 MB). Download the model (~469 MB) on-demand in Settings or import any custom GGUF model from device storage.
+- **On-Device RAG Prompt Augmentation (`LocalRagRetriever`)**: Automatically enriches the LLM prompt with matching bank exemplars from a code-baked knowledge bank (`rag_exemplars.dart`) and known user merchants/accounts, boosting accuracy while remaining 100% offline with zero network latency.
 - **Background Fallback**: When enabled in Settings, the AI automatically steps in when regular regex parsing fails during SMS scans.
 - **Scan Existing SMS for Review (`ScanReviewScreen`)**: Run a full inbox and unadded SMS scan on demand using both regex and on-device AI. Found transactions are presented in an interactive review checklist where you can toggle candidates, inspect raw SMS bodies, see cumulative totals, and batch-add them with one tap.
 - **Unified Paste Transaction Dialog (`PasteTransactionDialog`)**: Directly paste any bank SMS or email notification text from your clipboard. The system cascades through SMS patterns, email templates, and on-device AI to extract details and opens `AddTransactionScreen` pre-filled for rapid confirmation.
 - **✨ AI Quick Actions**: Accessible via the Transaction Actions bottom sheet (`Icons.grid_view_rounded`) in the Transactions toolbar whenever AI is available, giving instant access to Scan Existing SMS and Paste Transaction tools.
 - **Interactive Parsing from Inbox**: In the **Unadded SMS** inbox, tap the ✨ **Parse with on-device AI** button on any message to parse it and prefill `AddTransactionScreen` for instant review.
 - **In-App Management**: Download the Qwen 2.5 model with live progress or import your own GGUF weights, inspect storage usage, and toggle fallback anytime in Settings.
+
+<a id="contributing-bank-sms-formats"></a>
+### 4.1 🤝 Contributing Bank SMS Formats (Improving Local AI & RAG)
+Help make on-device AI parsing better for everyone! If you receive a bank SMS that isn't parsed automatically, you can voluntarily contribute its anonymized format to help us train the local model and expand code-baked RAG exemplars.
+
+#### 🔒 Privacy Guarantee
+- **100% Voluntary**: You only contribute if and when you decide to.
+- **Zero Personal Data**: Account numbers, card numbers, account balances, reference/UTR/RRN numbers, phone numbers, and OTPs are automatically masked with `*XXXX` or `[MASKED]`.
+- **You Review Before Submitting**: The app shows an interactive preview so you can verify or edit the text before sending.
+
+#### 🚀 How to Contribute in 3 Simple Steps:
+1. **Open the Contribution Tool**:
+   - In **Actions > Unadded SMS**, tap the 🤝 **Contribute format** icon on any message card.
+   - Or go to **Settings > On-Device AI > Contribute a bank SMS format**.
+2. **Inspect Redactions**:
+   - Check the sanitized preview. Verify that personal details (card/account digits, balances) are masked.
+3. **1-Tap Submit on GitHub**:
+   - Tap **Contribute on GitHub ↗**. Your sanitized snippet is copied to your clipboard, and a pre-filled issue template opens in your browser.
+   - Tap **Submit new issue** on GitHub. That's it!
+
+Maintainers regularly curate accepted community contributions into `lib/src/core/rag_exemplars.dart` and the offline training dataset, shipping improvements with upcoming app releases.
 
 ### 5. ✉️ Email Transaction Support (Gmail IMAP & Manual Paste)
 Missing bank SMS alerts due to carrier network drops or telecom delivery issues? TU Expense Tracker bridges the gap with comprehensive email support:

@@ -18,6 +18,7 @@ import 'package:llama_flutter_android/llama_flutter_android.dart';
 import '../../core/email_parser.dart';
 import '../../core/ledger_prefs.dart';
 import '../../core/parser.dart';
+import 'local_rag_retriever.dart';
 
 class LocalLlmService {
   LocalLlmService._();
@@ -237,18 +238,8 @@ class LocalLlmService {
     await _ensureLoaded();
     if (_controller == null) return null;
 
-    const String systemPrompt =
-        'You are an expert bank transaction parser. Extract transaction details from the bank notification (SMS or email) into JSON format.\n'
-        'Output ONLY a single valid JSON object with the following keys:\n'
-        '"is_transaction": true or false,\n'
-        '"type": "debit" if money was sent, spent, debited, paid, withdrawn, or transferred out; "credit" if money was received, credited, deposited, or refunded,\n'
-        '"amount": numeric amount (e.g. 90.0) or null,\n'
-        '"currency": "INR",\n'
-        '"merchant": recipient, payee, or vendor name or null,\n'
-        '"account": card number or account number (e.g. "4668") or null,\n'
-        '"reference": RRN, UTR, or UPI reference number or null,\n'
-        '"date": transaction date (YYYY-MM-DD) or null\n'
-        'Do not include any explanation or thoughts. Output pure JSON only.';
+    final String systemPrompt =
+        await LocalRagRetriever.instance.buildAugmentedSystemPrompt(messageText);
 
     final List<ChatMessage> messages = <ChatMessage>[
       ChatMessage(role: 'system', content: systemPrompt),

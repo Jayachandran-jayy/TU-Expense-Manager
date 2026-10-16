@@ -33,6 +33,8 @@ import '../sms_source.dart';
 import '../widgets/paste_transaction_dialog.dart';
 import '../widgets/server_backups_sheet.dart';
 import '../../ui_shared/shared_controls.dart';
+import 'contribute_sample_dialog.dart';
+import '../services/github_contribution_helper.dart';
 import 'categories_screen.dart';
 import 'merchant_defaults_screen.dart';
 import 'merge_names_screen.dart';
@@ -1183,6 +1185,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ],
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.volunteer_activism_outlined),
+                title: const Text('Contribute a bank SMS format'),
+                subtitle: const Text(
+                  'Voluntarily share an anonymized SMS format on GitHub to improve AI & RAG',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => ContributeSampleDialog.show(
+                  context,
+                  rawSms: '',
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.menu_book_outlined),
+                title: const Text('Simple contribution guide'),
+                subtitle: const Text(
+                  'Learn how to contribute bank SMS formats on GitHub',
+                ),
+                trailing: const Icon(Icons.open_in_new, size: 18),
+                onTap: GitHubContributionHelper.openReadmeGuide,
+              ),
               const Divider(height: 32),
               SettingsHeader('Categorization'),
                 ListTile(
