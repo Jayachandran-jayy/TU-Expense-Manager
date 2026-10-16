@@ -13,6 +13,7 @@ import '../../core/parser.dart';
 import '../database.dart';
 import '../services/local_llm_service.dart';
 import 'add_transaction_screen.dart';
+import 'contribute_sample_dialog.dart';
 
 class UnaddedSmsScreen extends StatefulWidget {
   const UnaddedSmsScreen({
@@ -204,6 +205,15 @@ class _UnaddedSmsScreenState extends State<UnaddedSmsScreen> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          IconButton(
+                            tooltip: 'Contribute format to improve AI',
+                            icon: const Icon(Icons.volunteer_activism_outlined),
+                            onPressed: () => ContributeSampleDialog.show(
+                              context,
+                              rawSms: msg.body,
+                              initialDate: msg.receivedAt.toIso8601String().split('T').first,
+                            ),
+                          ),
                           IconButton(
                             tooltip: 'Parse with on-device AI',
                             icon: const Icon(Icons.auto_awesome_outlined),

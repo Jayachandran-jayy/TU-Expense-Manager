@@ -677,6 +677,16 @@ class AppDatabase {
     );
   }
 
+  /// Returns the most recently seen unique merchants from the transactions table.
+  Future<List<String>> topMerchants({int limit = 10}) async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT DISTINCT merchant FROM transactions WHERE merchant != "" AND merchant != "Unknown" ORDER BY date DESC LIMIT ?',
+      <Object?>[limit],
+    );
+    return rows.map((row) => row['merchant'] as String).toList();
+  }
+
   /// The whole ledger, newest first, merged names applied.
   ///
   /// **`SnapshotStore.fromBackup` in `lib/src/core/snapshot_store.dart` is the

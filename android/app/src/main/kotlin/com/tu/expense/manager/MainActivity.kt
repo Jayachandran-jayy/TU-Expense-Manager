@@ -67,6 +67,22 @@ class MainActivity : FlutterFragmentActivity() {
                 "isFdroidInstalled" -> {
                     result.success(isFdroidInstalled())
                 }
+                "openUrl" -> {
+                    val url = call.argument<String>("url")
+                    if (url != null) {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("OPEN_URL_FAILED", e.message, null)
+                        }
+                    } else {
+                        result.error("INVALID_URL", "URL cannot be null", null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
