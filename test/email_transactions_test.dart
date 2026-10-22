@@ -13,6 +13,7 @@ class FakeEmailAdapter implements EmailClientAdapter {
   String? lastEmail;
   String? lastPassword;
   List<EmailMessageItem> cannedEmails = <EmailMessageItem>[];
+  int? lastDaysRequested;
 
   @override
   Future<void> connectAndLogin({
@@ -32,6 +33,7 @@ class FakeEmailAdapter implements EmailClientAdapter {
     int messageCount = 50,
     int days = 14,
   }) async {
+    lastDaysRequested = days;
     return cannedEmails;
   }
 
@@ -62,6 +64,13 @@ void main() {
 
       await service.clearCredentials();
       expect(await service.isConfigured(), isFalse);
+
+      // Lookback days persistence
+      expect(await service.getSavedLookbackDays(), 14);
+      await service.saveLookbackDays(30);
+      expect(await service.getSavedLookbackDays(), 30);
+      await service.saveLookbackDays(7);
+      expect(await service.getSavedLookbackDays(), 7);
     });
 
     test('fetchEmails with fake adapter handles data and dismissed items', () async {
@@ -709,6 +718,47 @@ void main() {
       expect(find.text('STARBUCKS COFFEE'), findsOneWidget);
       expect(find.text('NeoBank Card 9999'), findsOneWidget);
       expect(find.text('Ref: STAR-7711'), findsOneWidget);
+    });
+
+    testWidgets(
+        'selecting 7, 14, or 30 days chips updates lookback preference and requests corresponding days',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final fake = FakeEmailAdapter();
+      final service = EmailService.instance;
+      service.setAdapterForTesting(fake);
+      await service.saveCredentials('user@gmail.com', 'abcd1234efgh5678');
+      await service.saveLookbackDays(14);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EmailTransactionsScreen(
+            categories: categories,
+            merchants: merchants,
+            paymentTypes: paymentTypes,
+            transactions: const <ExpenseTxn>[],
+            onChanged: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fake.lastDaysRequested, 14);
+
+      // Tap 30 days chip
+      await tester.tap(find.text('30 days'));
+      await tester.pumpAndSettle();
+      expect(fake.lastDaysRequested, 30);
+      expect(await service.getSavedLookbackDays(), 30);
+
+      // Tap 7 days chip
+      await tester.tap(find.text('7 days'));
+      await tester.pumpAndSettle();
+      expect(fake.lastDaysRequested, 7);
+      expect(await service.getSavedLookbackDays(), 7);
     });
   });
 }
