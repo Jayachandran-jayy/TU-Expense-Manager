@@ -66,6 +66,7 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
   Future<void> _checkStatusAndLoad() async {
     final accounts = await _emailService.getAccounts();
     final activeEmail = await _emailService.getActiveEmail();
+    final savedDays = await _emailService.getSavedLookbackDays();
     final configured = accounts.isNotEmpty;
     if (!mounted) return;
 
@@ -73,6 +74,7 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
       _accounts = accounts;
       _isConfigured = configured;
       _connectedEmail = activeEmail;
+      _selectedDays = savedDays;
     });
 
     if (configured) {
@@ -785,6 +787,7 @@ class _EmailTransactionsScreenState extends State<EmailTransactionsScreen> {
                         onSelected: (selected) {
                           if (selected) {
                             setState(() => _selectedDays = days);
+                            _emailService.saveLookbackDays(days);
                             _fetchEmails();
                           }
                         },

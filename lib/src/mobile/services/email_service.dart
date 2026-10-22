@@ -79,16 +79,46 @@ class EnoughMailClientAdapter implements EmailClientAdapter {
     }
 
     await client.selectInbox();
-    final fetchResult = await client.fetchRecentMessages(
-      messageCount: messageCount,
-      criteria: '(FLAGS BODY[])',
-    );
+    final cutoffDate = DateTime.now().subtract(Duration(days: days));
+    final afterStr =
+        '${cutoffDate.year}/${cutoffDate.month.toString().padLeft(2, '0')}/${cutoffDate.day.toString().padLeft(2, '0')}';
+    const keywords =
+        '(spent OR debited OR credited OR received OR txn OR transaction OR alert OR inr OR rs OR "credit card" OR "debit card" OR purchase OR hdfc OR icici OR sbi OR axis OR kotak OR "yes bank" OR indusind)';
+
+    SearchImapResult? searchResult;
+    try {
+      searchResult = await client.searchMessages(
+        searchCriteria: 'X-GM-RAW "after:$afterStr $keywords"',
+      );
+    } catch (_) {
+      try {
+        final imapDate = DateCodec.encodeSearchDate(cutoffDate);
+        searchResult = await client.searchMessages(
+          searchCriteria: 'SINCE "$imapDate"',
+        );
+      } catch (_) {}
+    }
+
+    List<MimeMessage> messages = <MimeMessage>[];
+
+    final seq = searchResult?.matchingSequence;
+    if (seq != null && seq.isNotEmpty) {
+      final cappedSeq = _capSequence(seq, maxCount: 150);
+      final fetchResult = await client.fetchMessages(
+        cappedSeq,
+        '(FLAGS BODY[])',
+      );
+      messages = fetchResult.messages.reversed.toList();
+    } else if (searchResult == null) {
+      // Fallback: If server search failed or threw, fall back to recent messages
+      final fetchResult = await client.fetchRecentMessages(
+        messageCount: messageCount,
+        criteria: '(FLAGS BODY[])',
+      );
+      messages = fetchResult.messages.reversed.toList();
+    }
 
     final List<EmailMessageItem> results = <EmailMessageItem>[];
-    final cutoffDate = DateTime.now().subtract(Duration(days: days));
-
-    // Sort newest messages first
-    final messages = fetchResult.messages.reversed.toList();
 
     for (var i = 0; i < messages.length; i++) {
       final msg = messages[i];
@@ -125,11 +155,25 @@ class EnoughMailClientAdapter implements EmailClientAdapter {
     return results;
   }
 
+  static MessageSequence _capSequence(MessageSequence seq, {int maxCount = 150}) {
+    try {
+      final list = seq.toList();
+      if (list.length <= maxCount) return seq;
+      final trimmed = list.sublist(list.length - maxCount);
+      return MessageSequence.fromIds(trimmed, isUid: seq.isUidSequence);
+    } catch (_) {
+      return seq;
+    }
+  }
+
   static bool _matchesBankKeywords(String subject, String from, String body) {
     final lower = '$subject $from $body'.toLowerCase();
     return lower.contains('spent') ||
         lower.contains('debited') ||
+        lower.contains('credited') ||
+        lower.contains('received') ||
         lower.contains('transaction') ||
+        lower.contains('txn') ||
         lower.contains('alert') ||
         lower.contains('inr') ||
         lower.contains('rs.') ||
@@ -201,6 +245,7 @@ class EmailService {
   static const String _kLegacyEmailKey = 'email_sync.gmail_address';
   static const String _kLegacyAppPasswordKey = 'email_sync.app_password';
   static const String _kDismissedIdsKey = 'email_sync.dismissed_ids';
+  static const String _kLookbackDaysKey = 'email_sync.lookback_days';
 
   EmailClientAdapter? _clientAdapter;
 
@@ -363,6 +408,18 @@ class EmailService {
       list.add(id);
       await prefs.setStringList(_kDismissedIdsKey, list);
     }
+  }
+
+  /// Returns the saved lookback days preference (defaults to 14).
+  Future<int> getSavedLookbackDays() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kLookbackDaysKey) ?? 14;
+  }
+
+  /// Persists the user's selected lookback days preference (7, 14, 30).
+  Future<void> saveLookbackDays(int days) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kLookbackDaysKey, days);
   }
 
   /// Fetches recent emails for the specified [accountEmail], or the active account if omitted.
