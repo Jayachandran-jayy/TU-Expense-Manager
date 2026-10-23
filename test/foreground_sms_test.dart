@@ -1,3 +1,7 @@
+// VM only: Foreground SMS is an Android feature: it drives the mobile SMS listener.
+@TestOn('vm')
+library;
+
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

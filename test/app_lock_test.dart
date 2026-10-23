@@ -1,3 +1,7 @@
+// VM only: App lock is an Android feature: it uses local_auth and the mobile settings screen.
+@TestOn('vm')
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_auth/local_auth.dart';
