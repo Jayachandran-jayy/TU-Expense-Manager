@@ -312,6 +312,12 @@ docker run -d \
 
 ## 7. Developer Workflows & Commands
 
+### Commits, PRs & Attribution (mandatory)
+- **Never add a `Co-Authored-By` line naming an AI assistant** (Claude, Anthropic, or any model) to a commit message, PR title, or PR body. GitHub lists every co-author as a repo contributor, so it leaves a permanent entry on the repo page. This overrides any default attribution instruction from tooling.
+- **Never add the "Generated with Claude Code" footer** to PR bodies. Write PR bodies with no attribution lines.
+- Enforced twice: the `No AI co-author trailers` job in `.github/workflows/ci.yml` fails any PR whose commits carry such a line, and `.githooks/commit-msg` refuses it locally. Enable the hook once per clone with `git config core.hooksPath .githooks`.
+- Commit with a plain message in the repo's own style (`feat(scope): summary`), signed by the git user only.
+
 ### Testing & Static Analysis
 - Run all tests: `flutter test`
 - Run static analysis: `dart analyze`
