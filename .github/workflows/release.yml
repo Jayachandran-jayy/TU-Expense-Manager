@@ -79,10 +79,10 @@ jobs:
           fi
 
       - name: Build split-per-ABI APKs
-        run: flutter build apk --release --split-per-abi ${{ steps.version.outputs.args }}
+        run: flutter build apk --release --split-per-abi ${{ steps.version.outputs.args }} --dart-define=CONTRIB_URL=${{ secrets.CONTRIB_URL }} --dart-define=CONTRIB_KEY=${{ secrets.CONTRIB_KEY }}
 
       - name: Build universal APK
-        run: flutter build apk --release ${{ steps.version.outputs.args }}
+        run: flutter build apk --release ${{ steps.version.outputs.args }} --dart-define=CONTRIB_URL=${{ secrets.CONTRIB_URL }} --dart-define=CONTRIB_KEY=${{ secrets.CONTRIB_KEY }}
 
       # Manual runs have no tag to release against, so keep the APK reachable.
       - name: Upload APKs as build artifacts

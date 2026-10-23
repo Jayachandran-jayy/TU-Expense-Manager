@@ -1,3 +1,7 @@
+// VM only: Drives the mobile settings screen and the on-device AI model, which is Android-only.
+@TestOn('vm')
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';

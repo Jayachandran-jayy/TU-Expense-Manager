@@ -1,3 +1,7 @@
+// VM only: Drives the mobile add-transaction screen, which imports dart:io.
+@TestOn('vm')
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tu_expense_tracker/main.dart';

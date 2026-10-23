@@ -47,7 +47,7 @@ class GitHubContributionHelper {
 - **Bank / Provider**: ${bankHint.isEmpty ? 'Unknown' : bankHint}
 - **Transaction Type**: $transactionType
 - **Extracted Merchant**: $merchant
-- **Extracted Amount**: ${amount != null ? '₹$amount' : 'N/A'}
+- **Extracted Amount**: ${amount != null ? '₹${amount.toStringAsFixed(2)}' : 'N/A'}
 
 #### 📄 Sanitized SMS (Accounts, balances & refs masked)
 ```text

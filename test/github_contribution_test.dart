@@ -18,7 +18,7 @@ void main() {
       expect(body, contains('**Bank / Provider**: HDFC Bank'));
       expect(body, contains('**Transaction Type**: Debit'));
       expect(body, contains('**Extracted Merchant**: Swiggy'));
-      expect(body, contains('₹450.0'));
+      expect(body, contains('₹450.00'));
       expect(body, contains('Rs 450 spent on HDFC Card ending *XXXX'));
       expect(body, contains('"is_transaction": true'));
       expect(body, contains('"merchant": "Swiggy"'));
