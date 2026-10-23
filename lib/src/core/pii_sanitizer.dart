@@ -104,6 +104,26 @@ class PiiSanitizer {
       });
     }
 
+    // 4b. Scrub UPI IDs (name@bank). Runs after email, which needs a dot in the domain.
+    final RegExp upiRegex = RegExp(r'\b[A-Za-z0-9._-]{2,}@[A-Za-z]{2,}\b');
+    if (upiRegex.hasMatch(text)) {
+      text = text.replaceAllMapped(upiRegex, (Match m) {
+        count++;
+        entities.add('UPI ID');
+        return '[UPI_ID]';
+      });
+    }
+
+    // 4c. Scrub PAN (ABCDE1234F). Case-sensitive, as PAN is always upper case.
+    final RegExp panRegex = RegExp(r'\b[A-Z]{5}[0-9]{4}[A-Z]\b');
+    if (panRegex.hasMatch(text)) {
+      text = text.replaceAllMapped(panRegex, (Match m) {
+        count++;
+        entities.add('PAN');
+        return '[PAN]';
+      });
+    }
+
     // 5. Scrub Phone Numbers (10-digit Indian mobile or with country code)
     final RegExp phoneRegex = RegExp(
       r'(?:\+?91[\s-]?)?\b[6-9][0-9]{4}[\s-]?[0-9]{5}\b',
@@ -118,7 +138,7 @@ class PiiSanitizer {
 
     // 6. Scrub Account Numbers & Card Numbers with preceding keywords
     final RegExp acctKeywordRegex = RegExp(
-      r'\b(?:a/c|acct|account|card|credit\s*card|debit\s*card)\s*(?:no\.?|num|number|ending|end)?[\s#:*]*(?:[xX*]+)?([0-9]{4,16})\b',
+      r'\b(?:a/c|acc\.?|acct|account|card|credit\s*card|debit\s*card)\s*(?:no\.?|num|number|ending|end)?[\s#:*]*(?:[xX*]+)?([0-9]{4,16})\b',
       caseSensitive: false,
     );
     if (acctKeywordRegex.hasMatch(text)) {
@@ -129,6 +149,19 @@ class PiiSanitizer {
         final String digits = m.group(1)!;
         // Keep at most last 4 digits masked as *XXXX or replace completely
         return full.replaceFirst(digits, '*XXXX');
+      });
+    }
+
+    // 6b. Scrub Australian BSB numbers (e.g. BSB 062-000)
+    final RegExp bsbRegex = RegExp(
+      r'\bbsb[\s:#-]*[0-9]{3}-?[0-9]{3}\b',
+      caseSensitive: false,
+    );
+    if (bsbRegex.hasMatch(text)) {
+      text = text.replaceAllMapped(bsbRegex, (Match m) {
+        count++;
+        entities.add('BSB');
+        return '[BSB]';
       });
     }
 

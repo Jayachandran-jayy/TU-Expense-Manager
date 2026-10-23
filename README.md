@@ -32,7 +32,7 @@
 
 Instead of manually typing every daily expense or giving third-party apps access to your bank accounts, TU Expense Tracker **automatically reads your incoming bank transaction SMS alerts** (YES Bank, HDFC, ICICI, SBI, Axis, Kotak, UPI, credit cards, and debit cards) directly on your device.
 
-- 🔒 **100% Private & Offline First**: Everything stays strictly on your phone in a local SQLite database. No data ever leaves your device unless you choose to sync with your own self-hosted server.
+- 🔒 **100% Private & Offline First**: Everything stays strictly on your phone in a local SQLite database. No data ever leaves your device unless you choose to sync with your own self-hosted server, or switch on anonymous SMS sample sharing (off by default).
 - ⚡ **Zero Manual Effort for Routine Purchases**: Categorize a store once (e.g., *Swiggy → Food*), and the app remembers it forever.
 - ✂️ **Smart Multi-Category Splitting**: Easily split multi-item receipts (e.g., *Amazon* or *Supermarkets*) across several categories.
 - 🎨 **Beautiful Modern UI**: Built with Flutter featuring smooth rounded fintech cards, vibrant category emojis, customizable accent palettes, and a true battery-saving OLED pitch black mode.
@@ -63,7 +63,7 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 
 ### 4. 🧠 On-Device AI SMS Parser & Fallback (Optional & 100% Offline)
 For unformatted or non-standard SMS messages where deterministic regex patterns fail, TU Expense Tracker includes an optional, privacy-respecting on-device AI assistant powered by `llama.cpp` and Qwen 2.5 (0.5B Instruct):
-- **100% Offline & Private**: Runs directly on your device CPU. No API keys, no internet connection required for parsing, and zero financial telemetry leaves your phone.
+- **100% Offline & Private**: Runs directly on your device CPU. No API keys, no internet connection required for parsing, and zero financial telemetry leaves your phone. The only optional upload is the anonymous SMS sample you choose to send (see 4.1).
 - **Zero APK Bloat (F-Droid Compliant)**: Model weights are never bundled into the APK to keep the app lightweight (~25 MB). Download the model (~469 MB) on-demand in Settings or import any custom GGUF model from device storage.
 - **On-Device RAG Prompt Augmentation (`LocalRagRetriever`)**: Automatically enriches the LLM prompt with matching bank exemplars from a code-baked knowledge bank (`rag_exemplars.dart`) and known user merchants/accounts, boosting accuracy while remaining 100% offline with zero network latency.
 - **Background Fallback**: When enabled in Settings, the AI automatically steps in when regular regex parsing fails during SMS scans.
@@ -78,19 +78,19 @@ For unformatted or non-standard SMS messages where deterministic regex patterns 
 Help make on-device AI parsing better for everyone! If you receive a bank SMS that isn't parsed automatically, you can voluntarily contribute its anonymized format to help us train the local model and expand code-baked RAG exemplars.
 
 #### 🔒 Privacy Guarantee
-- **100% Voluntary**: You only contribute if and when you decide to.
-- **Zero Personal Data**: Account numbers, card numbers, account balances, reference/UTR/RRN numbers, phone numbers, and OTPs are automatically masked with `*XXXX` or `[MASKED]`.
-- **You Review Before Submitting**: The app shows an interactive preview so you can verify or edit the text before sending.
+- **Off by default**: Turn on **Settings > On-Device AI > Share anonymous SMS samples** to enable sending. Nothing is sent while it is off.
+- **100% Voluntary**: Nothing is sent unless you review a sample and tap **Send anonymously**.
+- **Zero Personal Data**: Account numbers, card numbers, UPI IDs, PAN, BSB numbers, account balances, reference/UTR/RRN numbers, phone numbers, emails, and OTPs are automatically masked. The app checks the text again just before sending.
+- **Only these fields are sent**: the masked SMS text, bank, debit or credit, amount and merchant. No account, device ID or GitHub login is included.
+- **You Review Before Sending**: The app shows the masked text so you can verify or edit it before sending.
 
 #### 🚀 How to Contribute in 3 Simple Steps:
-1. **Open the Contribution Tool**:
-   - In **Actions > Unadded SMS**, tap the 🤝 **Contribute format** icon on any message card.
-   - Or go to **Settings > On-Device AI > Contribute a bank SMS format**.
+1. **Turn sharing on**:
+   - Go to **Settings > On-Device AI > Share anonymous SMS samples** and agree to the summary.
 2. **Inspect Redactions**:
-   - Check the sanitized preview. Verify that personal details (card/account digits, balances) are masked.
-3. **1-Tap Submit on GitHub**:
-   - Tap **Contribute on GitHub ↗**. Your sanitized snippet is copied to your clipboard, and a pre-filled issue template opens in your browser.
-   - Tap **Submit new issue** on GitHub. That's it!
+   - In **Actions > Unadded SMS**, tap the 🤝 icon on a message card, or use **Settings > Contribute a bank SMS format**. Check that personal details are masked.
+3. **1-Tap Send**:
+   - Tap **Send anonymously**. The sample is stored in the project's anonymous samples table. You don't need a GitHub account.
 
 Maintainers regularly curate accepted community contributions into `lib/src/core/rag_exemplars.dart` and the offline training dataset, shipping improvements with upcoming app releases.
 
@@ -271,7 +271,7 @@ Because this app reads bank SMS alerts on your device and was downloaded outside
 
 # 🛠️ Technical Architecture & Developer Guide
 
-Everything stays on the device by default. There is no backend and no network call unless you choose to run one — see [Self-hosting](#self-hosting-optional), which is entirely optional and off until you configure it.
+Everything stays on the device by default. There is no backend and no network call unless you choose to run one, or turn on anonymous SMS sample sharing (section 4.1) — see [Self-hosting](#self-hosting-optional), which is entirely optional and off until you configure it.
 
 
 ## How it works
