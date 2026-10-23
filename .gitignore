@@ -64,3 +64,6 @@ server/.dart_tool/
 
 # The web build output
 /build/web/
+
+# Supabase CLI local state (linked project ref, not for git)
+supabase/.temp/

@@ -13,6 +13,7 @@ class LedgerPrefs {
   static const String _aiFallbackKey = 'ledger.ai_fallback_enabled';
   static const String _customModelPathKey = 'ledger.custom_model_path';
   static const String _appLockKey = 'app.lock_enabled';
+  static const String _contributeKey = 'ledger.contribute_enabled';
 
   /// Whether App Lock (biometric / screen lock credential) is enabled.
   /// Defaults to false (off).
@@ -50,6 +51,18 @@ class LedgerPrefs {
   Future<void> setAiFallbackEnabled(bool value) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_aiFallbackKey, value);
+  }
+
+  /// Whether the user has opted in to sending anonymous SMS samples. Defaults to false (off).
+  Future<bool> contributeEnabled() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_contributeKey) ?? false;
+  }
+
+  /// Sets whether the user has opted in to sending anonymous SMS samples.
+  Future<void> setContributeEnabled(bool value) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_contributeKey, value);
   }
 
   /// Custom GGUF model path picked by user, if any.

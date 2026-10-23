@@ -40,6 +40,30 @@ void main() {
       expect(result.sanitizedText, isNot(contains('help@bank.com')));
     });
 
+    test('masks UPI IDs, PAN, and Australian BSB and account numbers', () {
+      const sms = 'Paid Rs 200 to shop@okhdfcbank. PAN ABCDE1234F. BSB 062-000 Acc 12345678.';
+      final result = sanitizer.sanitize(sms);
+
+      expect(result.sanitizedText, contains('[UPI_ID]'));
+      expect(result.sanitizedText, contains('[PAN]'));
+      expect(result.sanitizedText, contains('[BSB]'));
+      expect(result.sanitizedText, contains('Acc *XXXX'));
+      expect(result.sanitizedText, isNot(contains('shop@okhdfcbank')));
+      expect(result.sanitizedText, isNot(contains('ABCDE1234F')));
+      expect(result.sanitizedText, isNot(contains('062-000')));
+      expect(result.sanitizedText, contains('Rs 200'));
+      expect(result.detectedEntities, containsAll(<String>['UPI ID', 'PAN', 'BSB']));
+    });
+
+    test('sanitized output has nothing left to redact', () {
+      const sms = 'Your OTP is 482910. A/c 54321 debited Rs 500. Bal: Rs 12,000. Mail help@bank.com';
+      final once = sanitizer.sanitize(sms);
+      final twice = sanitizer.sanitize(once.sanitizedText);
+
+      expect(twice.hasRedactions, isFalse);
+      expect(twice.sanitizedText, once.sanitizedText);
+    });
+
     test('handles empty input gracefully', () {
       final result = sanitizer.sanitize('   ');
       expect(result.hasRedactions, isFalse);

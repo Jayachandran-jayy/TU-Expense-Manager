@@ -1,7 +1,8 @@
 /// Interactive modal dialog for voluntarily contributing sanitized bank SMS formats.
 ///
-/// Features a simple 3-step guide, automatic PII redaction preview, direct GitHub issue
-/// launching, and clickable link to the GitHub README guide.
+/// Shows the automatic PII redaction preview and sends the reviewed sample to the
+/// anonymous contributions table with one tap. Sending is only possible once the user
+/// has opted in under Settings.
 library;
 
 import 'dart:convert';
@@ -9,7 +10,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/contribution_checks.dart';
+import '../../core/ledger_prefs.dart';
 import '../../core/pii_sanitizer.dart';
+import '../services/contribution_uploader.dart';
 import '../services/github_contribution_helper.dart';
 
 class ContributeSampleDialog extends StatefulWidget {
@@ -66,6 +70,9 @@ class _ContributeSampleDialogState extends State<ContributeSampleDialog> {
   late final TextEditingController _amountController;
   late String _direction;
   late final SanitizedResult _sanitizedResult;
+  final ContributionUploader _uploader = ContributionUploader();
+  bool _optedIn = false;
+  bool _sending = false;
 
   @override
   void initState() {
@@ -78,6 +85,7 @@ class _ContributeSampleDialogState extends State<ContributeSampleDialog> {
       text: widget.initialAmount != null ? widget.initialAmount!.toStringAsFixed(2) : '',
     );
     _direction = widget.initialDirection;
+    _loadOptIn();
   }
 
   @override
@@ -86,7 +94,14 @@ class _ContributeSampleDialogState extends State<ContributeSampleDialog> {
     _bankController.dispose();
     _merchantController.dispose();
     _amountController.dispose();
+    _uploader.close();
     super.dispose();
+  }
+
+  Future<void> _loadOptIn() async {
+    final bool optedIn = await LedgerPrefs.instance.contributeEnabled();
+    if (!mounted) return;
+    setState(() => _optedIn = optedIn);
   }
 
   String _detectBank(String text) {
@@ -106,29 +121,133 @@ class _ContributeSampleDialogState extends State<ContributeSampleDialog> {
     return '';
   }
 
-  Future<void> _submitToGitHub() async {
+  Future<void> _send() async {
     final amount = double.tryParse(_amountController.text.trim().replaceAll(',', ''));
     final merchant = _merchantController.text.trim().isEmpty ? 'Unknown' : _merchantController.text.trim();
     final bank = _bankController.text.trim();
 
-    await GitHubContributionHelper.launchContributionFlow(
+    if (!await _passesReviewChecks()) return;
+
+    setState(() => _sending = true);
+    final ContributionResult result = await _uploader.send(
+      SmsContribution(
+        bank: bank,
+        txnType: _direction.toLowerCase(),
+        amount: amount,
+        merchant: merchant,
+        sanitizedSms: _smsController.text.trim(),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _sending = false);
+
+    if (result == ContributionResult.sent) {
+      Navigator.of(context).pop();
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_messageFor(result)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  /// Checks shared by both routes: no personal details left in the text, and a
+  /// confirmation when the text reads as a scheduled payment.
+  Future<bool> _passesReviewChecks() async {
+    if (PiiSanitizer.instance.sanitize(_smsController.text).hasRedactions) {
+      _showMessage('Personal details are still in the text. Remove them and try again. Nothing was sent.');
+      return false;
+    }
+    if (scheduledWordingIn(_smsController.text).isEmpty) return true;
+    return _confirmScheduled();
+  }
+
+  /// Opens a pre-filled public GitHub issue. The user submits it on GitHub, so
+  /// the maintainer can reply there. Nothing is sent by the app itself.
+  Future<void> _sendToGitHub() async {
+    if (!await _passesReviewChecks()) return;
+    if (!mounted) return;
+    final bool publish = await _confirmPublic();
+    if (!publish) return;
+
+    final amount = double.tryParse(_amountController.text.trim().replaceAll(',', ''));
+    final merchant = _merchantController.text.trim().isEmpty ? 'Unknown' : _merchantController.text.trim();
+
+    final bool opened = await GitHubContributionHelper.launchContributionFlow(
       sanitizedSms: _smsController.text.trim(),
-      bankHint: bank,
+      bankHint: _bankController.text.trim(),
       transactionType: _direction,
       amount: amount,
       merchant: merchant,
       date: widget.initialDate,
     );
+    if (!mounted) return;
 
-    if (mounted) {
+    if (opened) {
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sanitized data copied to clipboard and GitHub opened! Tap "Submit new issue" on GitHub.'),
-          duration: Duration(seconds: 4),
-        ),
-      );
+      _showMessage('GitHub opened. Tap "Submit new issue" to post it. The text is also on your clipboard.');
+    } else {
+      _showMessage('Could not open GitHub. The text is on your clipboard, so paste it into a new issue on github.com.');
     }
+  }
+
+  Future<bool> _confirmPublic() async {
+    final bool? publish = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Post publicly on GitHub?'),
+        content: const Text(
+          'GitHub issues are public. Anyone can read this text, and it is tied to your GitHub account. '
+          'The app copies the text and opens GitHub. You submit it there.',
+        ),
+        actions: [
+          FilledButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Open GitHub')),
+        ],
+      ),
+    );
+    return publish ?? false;
+  }
+
+  void _showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), duration: const Duration(seconds: 4)),
+    );
+  }
+
+  /// Asks before sending text that reads as a scheduled payment. The default
+  /// is to cancel, so a reminder is not sent by accident.
+  Future<bool> _confirmScheduled() async {
+    final bool? send = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Is this a completed transaction?'),
+        content: const Text(
+          'This text reads like a payment that is scheduled or due, not one that has already been debited. '
+          'Samples like this teach the app the wrong thing.\n\n'
+          'Only send it if the money has already left your account.',
+        ),
+        actions: [
+          FilledButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send anyway')),
+        ],
+      ),
+    );
+    return send ?? false;
+  }
+
+  String _messageFor(ContributionResult result) {
+    return switch (result) {
+      ContributionResult.sent => 'Thanks! Your sample was sent anonymously.',
+      ContributionResult.disabled || ContributionResult.notConfigured =>
+        'Turn on "Share anonymous SMS samples" in Settings first. Nothing was sent.',
+      ContributionResult.hasPersonalDetails =>
+        'Personal details are still in the text. Remove them and try again. Nothing was sent.',
+      ContributionResult.tooLong => 'The SMS is too long to send. Shorten it and try again.',
+      ContributionResult.offline => 'No connection. Nothing was sent. Try again later.',
+      ContributionResult.rejected => 'The server did not accept this sample. Nothing was sent.',
+    };
   }
 
   void _copyJson() {
@@ -244,9 +363,9 @@ class _ContributeSampleDialogState extends State<ContributeSampleDialog> {
                   const SizedBox(height: 8),
                   _buildStepRow('1', 'Inspect Redactions', 'Account numbers, balances, & refs are masked.'),
                   const SizedBox(height: 4),
-                  _buildStepRow('2', '1-Tap Submit', 'Copies data and opens a pre-filled GitHub issue.'),
+                  _buildStepRow('2', '1-Tap Send', 'Sends only the fields below. No account or GitHub login.'),
                   const SizedBox(height: 4),
-                  _buildStepRow('3', 'Submit on GitHub', 'Click "Submit new issue" on GitHub to share!'),
+                  _buildStepRow('3', 'Opt-in only', 'Nothing is sent unless you turn sharing on in Settings.'),
                   const SizedBox(height: 8),
                   InkWell(
                     onTap: GitHubContributionHelper.openReadmeGuide,
@@ -301,6 +420,7 @@ class _ContributeSampleDialogState extends State<ContributeSampleDialog> {
             TextField(
               controller: _smsController,
               maxLines: 3,
+              onChanged: (_) => setState(() {}),
               style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
               decoration: InputDecoration(
                 labelText: 'Sanitized SMS (Verify No Personal Details)',
@@ -310,6 +430,32 @@ class _ContributeSampleDialogState extends State<ContributeSampleDialog> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // Scheduled-payment warning, shown while the text reads as a reminder
+            if (scheduledWordingIn(_smsController.text).isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withAlpha(30),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.withAlpha(120)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline, size: 18, color: Colors.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This reads like a scheduled or due payment. Only send it if the money has already been debited.',
+                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // Bank Name & Amount Fields
             Row(
@@ -376,13 +522,31 @@ class _ContributeSampleDialogState extends State<ContributeSampleDialog> {
 
             // Action Buttons
             FilledButton.icon(
-              icon: const Icon(Icons.open_in_browser_rounded),
-              label: const Text('Contribute on GitHub ↗'),
+              icon: _sending
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.send_rounded),
+              label: Text(_optedIn ? 'Send anonymously' : 'Sharing is off in Settings'),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              onPressed: _submitToGitHub,
+              onPressed: _optedIn && !_sending ? _send : null,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Have a GitHub account? Post it on GitHub so the maintainer can reply to you there. '
+              'The issue is public. No account? Send it anonymously above.',
+              style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: theme.hintColor),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+              label: const Text('Post on GitHub (public, replies possible)'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: _optedIn && !_sending ? _sendToGitHub : null,
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(

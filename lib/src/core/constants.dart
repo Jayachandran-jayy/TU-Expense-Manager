@@ -26,3 +26,13 @@ const double kSplitTolerance = 0.005;
 /// True when compiled with `--dart-define=FDROID_BUILD=true`. Disables the
 /// auto-updater to comply with F-Droid's inclusion policies.
 const bool isFDroidBuild = bool.fromEnvironment('FDROID_BUILD', defaultValue: false);
+
+/// Base URL and public anon key of the Supabase project that receives anonymous
+/// SMS samples. Supplied with `--dart-define`. The anon key can insert rows only
+/// (see `server/contrib/schema.sql`), so shipping it is safe. Left empty, the
+/// feature is hidden.
+const String kContributionUrl = String.fromEnvironment('CONTRIB_URL');
+const String kContributionKey = String.fromEnvironment('CONTRIB_KEY');
+
+/// True when the build carries a contributions backend.
+const bool isContributionConfigured = kContributionUrl != '' && kContributionKey != '';

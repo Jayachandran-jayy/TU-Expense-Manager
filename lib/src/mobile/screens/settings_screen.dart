@@ -72,6 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _appLock = false;
   bool _trackReceived = false;
   bool _aiFallback = false;
+  bool _contribute = false;
   bool _isAiModelAvailable = false;
   int? _aiModelSizeBytes;
   double? _downloadProgress;
@@ -131,6 +132,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final bool appLock = await LedgerPrefs.instance.appLockEnabled();
     final bool trackReceived = await LedgerPrefs.instance.trackReceived();
     final bool aiFallback = await LedgerPrefs.instance.aiFallbackEnabled();
+    final bool contribute = await LedgerPrefs.instance.contributeEnabled();
     final bool isAiAvailable = await LocalLlmService.instance.isModelAvailable();
     final int? aiSizeBytes = await LocalLlmService.instance.getModelSizeBytes();
 
@@ -152,6 +154,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _appLock = appLock;
       _trackReceived = trackReceived;
       _aiFallback = aiFallback;
+      _contribute = contribute;
       _isAiModelAvailable = isAiAvailable;
       _aiModelSizeBytes = aiSizeBytes;
       _loading = false;
@@ -226,6 +229,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     setState(() => _aiFallback = value);
     await LedgerPrefs.instance.setAiFallbackEnabled(value);
+  }
+
+  Future<void> _setContribute(bool value) async {
+    if (value && !await _confirmContribute()) return;
+    setState(() => _contribute = value);
+    await LedgerPrefs.instance.setContributeEnabled(value);
+  }
+
+  Future<bool> _confirmContribute() async {
+    final bool? agreed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Share anonymous SMS samples?'),
+        content: const Text(
+          'When you tap Send, the app uploads the masked SMS text plus the bank, debit or credit, amount and merchant you can see on the review screen.\n\n'
+          'Account numbers, balances, references, phone numbers, emails and UPI IDs are masked first. No account, device ID or GitHub login is sent.\n\n'
+          'Nothing is sent unless you tap Send, and you can turn this off at any time.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Agree')),
+        ],
+      ),
+    );
+    return agreed ?? false;
   }
 
   void _showDownloadModelDialog() {
@@ -1186,18 +1214,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
               const SizedBox(height: 8),
-              ListTile(
-                leading: const Icon(Icons.volunteer_activism_outlined),
-                title: const Text('Contribute a bank SMS format'),
-                subtitle: const Text(
-                  'Voluntarily share an anonymized SMS format on GitHub to improve AI & RAG',
+              if (isContributionConfigured)
+                SwitchListTile(
+                  value: _contribute,
+                  onChanged: _setContribute,
+                  title: const Text('Share anonymous SMS samples'),
+                  subtitle: const Text(
+                    'Off by default. Send a masked bank SMS format with one tap when you choose. Nothing is sent otherwise.',
+                  ),
                 ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => ContributeSampleDialog.show(
-                  context,
-                  rawSms: '',
+              if (isContributionConfigured && _contribute)
+                ListTile(
+                  leading: const Icon(Icons.volunteer_activism_outlined),
+                  title: const Text('Contribute a bank SMS format'),
+                  subtitle: const Text(
+                    'Review a masked SMS format and send it anonymously to improve AI & RAG',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => ContributeSampleDialog.show(
+                    context,
+                    rawSms: '',
+                  ),
                 ),
-              ),
               ListTile(
                 leading: const Icon(Icons.menu_book_outlined),
                 title: const Text('Simple contribution guide'),
