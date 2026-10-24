@@ -8,7 +8,9 @@ library;
 
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:intl/intl.dart';
 
 import '../core/aliases.dart';
@@ -19,6 +21,7 @@ import '../core/ledger_view.dart';
 import '../core/link_state.dart';
 import '../core/models.dart';
 import '../core/parser.dart';
+import '../core/statement_parser.dart';
 import '../ui_shared/connection_dot.dart';
 import '../ui_shared/dashboard_tab.dart';
 import '../ui_shared/formats.dart';
@@ -1102,6 +1105,117 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
+  /// Reads a bank or card statement PDF on the device and offers only the
+  /// spends the ledger does not already have.
+  Future<void> _importStatement() async {
+    final PlatformFile? picked = await FilePicker.pickFile(
+      dialogTitle: 'Choose a bank statement',
+      type: FileType.custom,
+      allowedExtensions: const <String>['pdf'],
+    );
+    final String? path = picked?.path;
+    if (path == null || !mounted) return;
+
+    String password = '';
+    String? text;
+    try {
+      while (text == null) {
+        try {
+          text = await withLoadingModal<String>(
+            context: context,
+            message: 'Reading statement…',
+            task: () => _sms.extractPdfText(path, password: password),
+          );
+        } on PlatformException catch (e) {
+          if (e.code != 'password') {
+            _toast('Could not read this PDF.');
+            return;
+          }
+          if (!mounted) return;
+          final String? entered = await _askStatementPassword(
+            wrong: password.isNotEmpty,
+          );
+          if (entered == null || !mounted) return;
+          password = entered;
+        }
+      }
+    } finally {
+      // The picker keeps a copy of the statement in the app cache; drop it.
+      await FilePicker.clearTemporaryFiles();
+    }
+
+    final List<StatementRow> rows = parseStatement(
+      text,
+      knownPaymentTypes: _transactions
+          .map((ExpenseTxn t) => t.paymentType)
+          .toSet(),
+    );
+    if (rows.isEmpty) {
+      _toast('No spends found in this statement.');
+      return;
+    }
+    final List<DeletedTxn> deleted = await _db.deletedTransactions();
+    final List<StatementRow> missing = notYetRecorded(rows, <RecordedSpend>[
+      for (final ExpenseTxn t in _transactions)
+        if (t.direction == TxnDirection.debit)
+          (amount: t.amount, date: t.date, paymentType: t.paymentType),
+      for (final DeletedTxn t in deleted)
+        if (t.direction == TxnDirection.debit)
+          (amount: t.amount, date: t.date, paymentType: t.paymentType),
+    ]);
+    if (!mounted) return;
+    if (missing.isEmpty) {
+      _toast(
+        'All ${rows.length} spends in this statement are already recorded.',
+      );
+      return;
+    }
+
+    await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
+        builder: (_) => ScanReviewScreen(
+          candidates: <CandidateTransaction>[
+            for (final StatementRow row in missing)
+              CandidateTransaction(parsed: row.parsed, rawBody: row.line),
+          ],
+          database: _db,
+          onAdded: _load,
+        ),
+      ),
+    );
+  }
+
+  /// Asks for the statement's password. Null when the user cancels.
+  Future<String?> _askStatementPassword({required bool wrong}) {
+    String typed = '';
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Statement password'),
+        content: TextField(
+          autofocus: true,
+          obscureText: true,
+          decoration: InputDecoration(
+            hintText: 'Password',
+            errorText: wrong ? 'Incorrect password' : null,
+          ),
+          onChanged: (String v) => typed = v,
+          onSubmitted: (String v) => Navigator.pop(dialogContext, v),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, typed),
+            child: const Text('Open'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openAiToolsSheet() async {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -1368,6 +1482,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                   onTap: () {
                     Navigator.pop(sheetContext);
                     _openEmailTransactions();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.picture_as_pdf_outlined),
+                  title: const Text('Import bank statement'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _importStatement();
                   },
                 ),
                 if (_isAiModelAvailable)

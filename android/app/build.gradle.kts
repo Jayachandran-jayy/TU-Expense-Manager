@@ -28,6 +28,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    packaging {
+        // BouncyCastle, pulled in by pdfbox-android, ships ~8 MB of post-quantum
+        // tables that opening a password-protected statement never touches.
+        resources.excludes += "org/bouncycastle/pqc/**"
+    }
+
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -76,6 +82,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Reads bank statement PDFs on the device (Apache-2.0, F-Droid safe).
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 }
 
 
