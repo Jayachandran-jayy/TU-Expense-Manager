@@ -105,6 +105,14 @@ Missing bank SMS alerts due to carrier network drops or telecom delivery issues?
 - **Ledger Deduplication Badges**: Emails matching transactions already recorded in your ledger display an `Added` badge to prevent duplicate charges.
 - **Dismiss & Hide**: Dismiss irrelevant notification emails with a single tap.
 
+### 5.1 📄 Bank Statement Import (PDF Catch-up & AI Fallback)
+Need to catch up on missed transactions or reconcile your accounts from monthly statements?
+- **100% Offline & Private PDF Parsing**: Select any bank statement PDF directly on your device. Processes securely on-device with support for password-protected statements. Temporary files are cleared immediately.
+- **Smart Missing-Spend Detection**: Compares all statement debits against your existing transactions and deleted records (within date and payment method bounds). Only missed spends are surfaced, avoiding duplicate entries.
+- **On-Device AI Fallback**: If standard statement row formats are unrecognized, the on-device AI model steps in to extract candidate transactions line by line.
+- **Batch Review & Add**: Review discovered spends with individual checkboxes in `ScanReviewScreen` before adding them to your ledger.
+- **Share Formats on GitHub**: Encounter an unsupported statement format? Export a pre-sanitized, PII-masked excerpt directly into a pre-filled GitHub issue to request format support. Statements and PDFs are never uploaded to any remote server.
+
 ### 6. 📊 Visual Spending Dashboard & Monthly Reports
 
 - **Interactive charts**: View category breakdowns as pie charts or horizontal bars.

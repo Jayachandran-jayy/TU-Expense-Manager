@@ -176,6 +176,12 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
   - **Lifecycle Lock Rules (`AppLockWrapper`)**: Intercepts `didChangeAppLifecycleState`. Triggers `_service.checkAndLock()` strictly on `AppLifecycleState.paused` when `!_service.isAuthenticating`. Inactive states (which occur when the OS biometric/PIN sheet itself is visible) are ignored to avoid re-locking loops.
   - **Window Privacy Protection (`FLAG_SECURE`)**: `MainActivity.kt` handles the `setSecureFlag` method channel to set or clear `WindowManager.LayoutParams.FLAG_SECURE`. When App Lock is enabled, the app window is protected from screenshots and masked in Android's recent apps switcher.
   - **Clean Barrier UI (`AppLockScreen`)**: Displays a full-screen theme-aware barrier with the TU Expense Tracker logo, lock message, and an explicit "Unlock with Biometrics / PIN" button for retry if the initial prompt is dismissed.
+- **Bank Statement PDF Import & Format Sharing Subsystem (`lib/src/core/statement_parser.dart`, `HomeShell._importStatement`, `pdfbox-android`)**:
+  - **100% Offline & On-Device PDF Processing**: Reads bank statement PDFs directly on Android via `pdfbox-android` native bindings. Supports password-protected PDF statements with password prompt dialog. Temporary picker files are securely pruned immediately after text extraction (`FilePicker.clearTemporaryFiles()`).
+  - **Universal Deterministic Line Parsing (`parseStatement`)**: Identifies statement rows that open with a date and end with an amount, determining direction from Dr/Cr/D/C markers, running balances, or leading signs while skipping opening and closing balance summaries. Automatically detects payment account/card types from known ledger methods.
+  - **Smart On-Device AI Statement Fallback**: When deterministic row parsing discovers no rows, cascades to the local LLM (`LocalLlmService.instance`) to parse lines with date/amount context sequentially with context clearing and safety guards against buffer overruns.
+  - **Missed Spend Filtering & Batch Review (`notYetRecorded`, `ScanReviewScreen`)**: Compares extracted debits against existing and tombstoned transactions matching amount, date (within 1 day tolerance), and payment type. Discovered missing spends are presented in `ScanReviewScreen` for interactive selection and atomic batch addition.
+  - **1-Tap Anonymous Format Contribution (`_shareStatementFormat`, `GitHubContributionHelper.launchStatementContribution`)**: Allows users to inspect and edit a sanitized, masked excerpt (headers and up to 10 rows with account numbers, references, balances, and PII masked) to open a pre-filled GitHub format request issue. Statements and PDFs are never uploaded or sent to third-party servers.
 
 ---
 
@@ -207,7 +213,7 @@ When filters change:
 
 - **Consolidated Transaction Actions Sheet (`HomeShell._openTransactionActionsSheet`)**:
   - Replaces crowded individual app bar icon buttons on the Transactions page with a single `Icons.grid_view_rounded` ("Actions") button.
-  - Opening the modal bottom sheet displays: "Check for new SMS" (with active progress spinner if scanning), "Unadded SMS" (with unread count badge), "Email transactions", "AI tools" (when on-device model is available), "Paste transaction", "Deleted transactions", and "Rescan all messages".
+  - Opening the modal bottom sheet displays: "Check for new SMS" (with active progress spinner if scanning), "Unadded SMS" (with unread count badge), "Email transactions", "Import bank statement", "AI tools" (when on-device model is available), "Paste transaction", "Deleted transactions", and "Rescan all messages".
   - Frees the top app bar width entirely so the "Transactions" title is never cut off or truncated.
 - **Theme Mode Dropdown Selector (`SettingsScreen`)**:
   - The `DropdownButton<AppThemeMode>` (wrapped in an outlined `InputDecorator`) displays `System`, `Light`, `Dark`, and `OLED Black` with each mode's leading icon, clean label, and trailing checkmark for the active selection, completely avoiding button segment clipping or awkward text wrapping across narrow mobile screens.
