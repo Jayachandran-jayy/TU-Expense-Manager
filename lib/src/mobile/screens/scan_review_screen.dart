@@ -31,11 +31,15 @@ class ScanReviewScreen extends StatefulWidget {
     required this.candidates,
     this.database,
     this.onAdded,
+    this.onShare,
   });
 
   final List<CandidateTransaction> candidates;
   final AppDatabase? database;
   final VoidCallback? onAdded;
+
+  /// Shows a "share this format" action when set (statement imports only).
+  final VoidCallback? onShare;
 
   @override
   State<ScanReviewScreen> createState() => _ScanReviewScreenState();
@@ -113,6 +117,12 @@ class _ScanReviewScreenState extends State<ScanReviewScreen> {
       appBar: AppBar(
         title: const Text('Found Transactions'),
         actions: [
+          if (widget.onShare != null)
+            IconButton(
+              onPressed: widget.onShare,
+              icon: const Icon(Icons.ios_share),
+              tooltip: 'Share this format on GitHub',
+            ),
           if (_candidates.isNotEmpty)
             TextButton.icon(
               onPressed: _isSaving ? null : _toggleSelectAll,

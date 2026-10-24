@@ -112,6 +112,34 @@ $prettyJson
   /// Opens the README contribution guide in the system browser.
   static Future<bool> openReadmeGuide() => openUrl(readmeGuideUrl);
 
+  /// Copies a masked statement excerpt to the clipboard and opens a pre-filled
+  /// GitHub issue for it. Only text the user has reviewed is sent; never the PDF.
+  static Future<bool> launchStatementContribution({
+    required String excerpt,
+    required String bankHint,
+  }) async {
+    final String body = '''
+### 🧾 Bank Statement Format Contribution
+
+- **Bank / Provider**: ${bankHint.isEmpty ? 'Unknown' : bankHint}
+
+#### 📄 Masked statement rows (accounts, references & balances masked)
+```text
+$excerpt
+```
+
+---
+*Submitted voluntarily from TU Expense Tracker so this statement layout can be read automatically.*
+''';
+    await Clipboard.setData(ClipboardData(text: body));
+    final Uri uri = Uri.https('github.com', '/$repoOwner/$repoName/issues/new', <String, String>{
+      'title': '[Statement Format]: ${bankHint.isEmpty ? 'Unknown bank' : bankHint}',
+      'body': body,
+      'labels': 'dataset-contribution',
+    });
+    return await openUrl(uri.toString());
+  }
+
   /// Copies sanitized payload to clipboard and opens the pre-filled GitHub issue in the browser.
   static Future<bool> launchContributionFlow({
     required String sanitizedSms,

@@ -32,6 +32,10 @@ class LocalLlmService {
 
   LlamaController? _controller;
   String? _loadedModelPath;
+
+  /// Completes when the native generation loop has really ended. A timed-out
+  /// parse returns before that, and starting another while it runs aborts the app.
+  Future<void> _lastGeneration = Future<void>.value();
   http.Client? _activeDownloadClient;
   bool _isDownloading = false;
 
@@ -237,6 +241,9 @@ class LocalLlmService {
 
     await _ensureLoaded();
     if (_controller == null) return null;
+    await _lastGeneration.timeout(const Duration(seconds: 60), onTimeout: () {});
+    // Each parse is a fresh question; leftover tokens from the last one overflow the 1024 context.
+    await _controller!.clearContext();
 
     final String systemPrompt =
         await LocalRagRetriever.instance.buildAugmentedSystemPrompt(messageText);
@@ -255,15 +262,19 @@ class LocalLlmService {
       maxTokens: 256,
     );
 
+    final Completer<void> finished = Completer<void>();
+    _lastGeneration = finished.future;
     final StreamSubscription<String> sub = stream.listen(
       (String token) {
         buffer.write(token);
       },
       onError: (Object err) {
         if (!completer.isCompleted) completer.completeError(err);
+        if (!finished.isCompleted) finished.complete();
       },
       onDone: () {
         if (!completer.isCompleted) completer.complete(buffer.toString());
+        if (!finished.isCompleted) finished.complete();
       },
     );
 
@@ -277,7 +288,9 @@ class LocalLlmService {
       );
       return parseRawJson(responseText, fallbackDate: receivedAt ?? DateTime.now());
     } finally {
-      await sub.cancel();
+      // After a timeout keep listening, so the native loop's final onDone still
+      // releases [_lastGeneration].
+      if (finished.isCompleted) await sub.cancel();
     }
   }
 

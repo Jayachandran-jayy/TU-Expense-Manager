@@ -160,6 +160,15 @@ class SmsSource {
     }
   }
 
+  /// Text of a statement PDF, read on the device. Throws a [PlatformException]
+  /// with code `password` when the file is locked and [password] is missing or wrong.
+  Future<String> extractPdfText(String path, {String password = ''}) async =>
+      await _channel.invokeMethod<String>('extractPdfText', <String, Object?>{
+        'path': path,
+        'password': password,
+      }) ??
+      '';
+
   /// `SmsMessage.date` is epoch milliseconds, or null when the provider did not
   /// supply it.
   static DateTime? _timestampOf(SmsMessage message) {

@@ -8,7 +8,9 @@ library;
 
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:intl/intl.dart';
 
 import '../core/aliases.dart';
@@ -19,6 +21,7 @@ import '../core/ledger_view.dart';
 import '../core/link_state.dart';
 import '../core/models.dart';
 import '../core/parser.dart';
+import '../core/statement_parser.dart';
 import '../ui_shared/connection_dot.dart';
 import '../ui_shared/dashboard_tab.dart';
 import '../ui_shared/formats.dart';
@@ -44,6 +47,7 @@ import 'sync_prefs.dart';
 import 'update_service.dart';
 import 'screens/scan_review_screen.dart';
 import 'services/app_lock_service.dart';
+import 'services/github_contribution_helper.dart';
 import 'services/local_llm_service.dart';
 import 'widgets/app_lock_wrapper.dart';
 import 'widgets/paste_transaction_dialog.dart';
@@ -1102,6 +1106,241 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
+  /// Reads a bank or card statement PDF on the device and offers only the
+  /// spends the ledger does not already have.
+  Future<void> _importStatement() async {
+    final PlatformFile? picked = await FilePicker.pickFile(
+      dialogTitle: 'Choose a bank statement',
+      type: FileType.custom,
+      allowedExtensions: const <String>['pdf'],
+    );
+    final String? path = picked?.path;
+    if (path == null || !mounted) return;
+
+    String password = '';
+    String? text;
+    try {
+      while (text == null) {
+        try {
+          text = await withLoadingModal<String>(
+            context: context,
+            message: 'Reading statement…',
+            task: () => _sms.extractPdfText(path, password: password),
+          );
+        } on PlatformException catch (e) {
+          if (e.code != 'password') {
+            _toast('Could not read this PDF.');
+            return;
+          }
+          if (!mounted) return;
+          final String? entered = await _askStatementPassword(
+            wrong: password.isNotEmpty,
+          );
+          if (entered == null || !mounted) return;
+          password = entered;
+        }
+      }
+    } finally {
+      // The picker keeps a copy of the statement in the app cache; drop it.
+      await FilePicker.clearTemporaryFiles();
+    }
+
+    final String statement = text;
+    final Set<String> known =
+        _transactions.map((ExpenseTxn t) => t.paymentType).toSet();
+    List<StatementRow> rows =
+        parseStatement(statement, knownPaymentTypes: known);
+    if (rows.isEmpty &&
+        mounted &&
+        await LocalLlmService.instance.isModelAvailable() &&
+        mounted) {
+      rows = await _readStatementWithAi(
+        statement,
+        statementPaymentType(statement, known),
+      );
+    }
+    if (rows.isEmpty) {
+      _offerStatementShare('No spends found in this statement.', statement);
+      return;
+    }
+    final List<DeletedTxn> deleted = await _db.deletedTransactions();
+    final List<StatementRow> missing = notYetRecorded(rows, <RecordedSpend>[
+      for (final ExpenseTxn t in _transactions)
+        if (t.direction == TxnDirection.debit)
+          (amount: t.amount, date: t.date, paymentType: t.paymentType),
+      for (final DeletedTxn t in deleted)
+        if (t.direction == TxnDirection.debit)
+          (amount: t.amount, date: t.date, paymentType: t.paymentType),
+    ]);
+    if (!mounted) return;
+    if (missing.isEmpty) {
+      _offerStatementShare(
+        'All ${rows.length} spends in this statement are already recorded.',
+        statement,
+      );
+      return;
+    }
+
+    await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
+        builder: (_) => ScanReviewScreen(
+          candidates: <CandidateTransaction>[
+            for (final StatementRow row in missing)
+              CandidateTransaction(parsed: row.parsed, rawBody: row.line),
+          ],
+          database: _db,
+          onAdded: _load,
+          onShare: () => _shareStatementFormat(statement),
+        ),
+      ),
+    );
+  }
+
+  /// Reads a statement layout the reader does not know, one line at a time,
+  /// with the on-device model.
+  Future<List<StatementRow>> _readStatementWithAi(
+    String statement,
+    String paymentType,
+  ) {
+    // shortcut: only the first 120 lines with an amount go to the model, one call each; batch them if longer statements turn up.
+    final List<String> lines =
+        statementCandidateLines(statement).take(120).toList();
+    return withProgressModal<List<StatementRow>>(
+      context: context,
+      message: 'Reading statement with on-device AI…',
+      task: (ProgressController progress) async {
+        final List<StatementRow> rows = <StatementRow>[];
+        for (var i = 0; i < lines.length; i++) {
+          progress.update(current: i, total: lines.length);
+          ParsedSms? parsed;
+          try {
+            parsed = await LocalLlmService.instance.parseTransactionText(
+              lines[i],
+              messageType: 'Bank statement line',
+            );
+          } catch (_) {}
+          if (parsed != null && parsed.direction == TxnDirection.debit) {
+            rows.add((
+              parsed: ParsedSms(
+                amount: parsed.amount,
+                paymentType: paymentType,
+                merchant: parsed.merchant,
+                date: parsed.date,
+                direction: TxnDirection.debit,
+                reference: parsed.reference,
+                templateId: 'statement_ai',
+                hasExplicitTime: parsed.hasExplicitTime,
+              ),
+              line: lines[i],
+            ));
+          }
+        }
+        return rows;
+      },
+    );
+  }
+
+  void _offerStatementShare(String message, String statement) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: SnackBarAction(
+            label: 'Share format',
+            onPressed: () => _shareStatementFormat(statement),
+          ),
+        ),
+      );
+  }
+
+  /// Shows the masked excerpt so the user can check and edit it, then opens a
+  /// pre-filled GitHub issue. Nothing is sent until they tap Post.
+  Future<void> _shareStatementFormat(String statement) async {
+    String excerpt = statementExcerpt(statement);
+    final bool? post = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Share this format on GitHub'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                'GitHub issues are public. Card and account numbers, '
+                'references and balances are masked. Remove any names you '
+                "don't want shown.",
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                initialValue: excerpt,
+                minLines: 4,
+                maxLines: 12,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (String v) => excerpt = v,
+              ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Post on GitHub'),
+          ),
+        ],
+      ),
+    );
+    if (post != true || excerpt.trim().isEmpty) return;
+    final bool opened =
+        await GitHubContributionHelper.launchStatementContribution(
+      excerpt: excerpt.trim(),
+      bankHint: statementBankHint(statement),
+    );
+    if (!opened) {
+      _toast('Could not open GitHub. The issue text is on your clipboard.');
+    }
+  }
+
+  /// Asks for the statement's password. Null when the user cancels.
+  Future<String?> _askStatementPassword({required bool wrong}) {
+    String typed = '';
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Statement password'),
+        content: TextField(
+          autofocus: true,
+          obscureText: true,
+          decoration: InputDecoration(
+            hintText: 'Password',
+            errorText: wrong ? 'Incorrect password' : null,
+          ),
+          onChanged: (String v) => typed = v,
+          onSubmitted: (String v) => Navigator.pop(dialogContext, v),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, typed),
+            child: const Text('Open'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openAiToolsSheet() async {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -1368,6 +1607,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                   onTap: () {
                     Navigator.pop(sheetContext);
                     _openEmailTransactions();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.picture_as_pdf_outlined),
+                  title: const Text('Import bank statement'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _importStatement();
                   },
                 ),
                 if (_isAiModelAvailable)

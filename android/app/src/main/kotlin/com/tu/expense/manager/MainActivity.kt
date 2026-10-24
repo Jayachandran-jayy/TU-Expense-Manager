@@ -12,6 +12,11 @@ import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException
+import com.tom_roush.pdfbox.text.PDFTextStripper
+import java.io.File
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterFragmentActivity() {
@@ -63,6 +68,27 @@ class MainActivity : FlutterFragmentActivity() {
                 "stopListening" -> {
                     stopListening()
                     result.success(true)
+                }
+                "extractPdfText" -> {
+                    val path = call.argument<String>("path")
+                    val password = call.argument<String>("password") ?: ""
+                    if (path == null) {
+                        result.error("PDF_ERROR", "No file", null)
+                    } else {
+                        backgroundExecutor.execute {
+                            try {
+                                PDFBoxResourceLoader.init(applicationContext)
+                                val text = PDDocument.load(File(path), password).use { doc ->
+                                    PDFTextStripper().apply { sortByPosition = true }.getText(doc)
+                                }
+                                mainHandler.post { result.success(text) }
+                            } catch (e: InvalidPasswordException) {
+                                mainHandler.post { result.error("password", "Password required", null) }
+                            } catch (e: Exception) {
+                                mainHandler.post { result.error("PDF_ERROR", e.message, null) }
+                            }
+                        }
+                    }
                 }
                 "isFdroidInstalled" -> {
                     result.success(isFdroidInstalled())
