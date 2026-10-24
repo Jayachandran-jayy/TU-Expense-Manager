@@ -2,49 +2,87 @@
 /// the ones the ledger has not recorded yet.
 ///
 /// Pure: the text arrives already extracted (PDFBox on Android, sorted by
-/// position), one statement row per line.
+/// position), one statement row per line. Nothing here knows a bank: a row is
+/// any line that opens with a date and closes with an amount.
 library;
 
 import 'parser.dart';
+import 'pii_sanitizer.dart';
 
 /// One spend found in a statement, with the line it came from for the review
 /// screen.
 typedef StatementRow = ({ParsedSms parsed, String line});
 
-/// `₹250.00`, `1,500.00`, `3,56,000.00` — statements always print paise.
-const String _amt = r'(?<amount>[\d,]+\.\d{2})';
+/// `250.00`, `1,500.00`, `3,56,000.00` — statements always print paise.
+const String _money = r'[\d,]+\.\d{2}';
+/// A date anywhere in a line: `05.10.2026`, `05 Oct 2026`, `05-Oct-26`, `2026-10-05`.
+final RegExp _anyDate = RegExp(r'\b(?:\d{1,2}[-/. ]\w{2,3}[-/. ]\d{2,4}|\d{4}-\d{2}-\d{2})\b');
 
-/// HDFC card: `03/10/2026| 13:42 TEST MARKETPLACE PRIVBangalore  C 250.00 l`.
-/// The `C` is how the rupee glyph extracts; a `+` before it marks a credit.
-final RegExp _hdfcCard = RegExp(
-  r'^(?<date>\d{2}/\d{2}/\d{4})\|\s*(?<time>\d{2}:\d{2})\s*(?<desc>.*?)\s*'
-  r'(?<credit>\+)?\s*(?:C|₹)\s*'
-  '$_amt'
-  r'(?:\s+\S+)?$',
+// Not part of a dotted date such as 05.10.2026.
+final RegExp _moneyToken = RegExp('(?<![\\d.])$_money(?![\\d]|\\.\\d)');
+
+/// The end of a row: an optional `+` (credit) and currency mark (`₹`, `Rs`,
+/// `INR`, or the `C` the rupee glyph extracts as), the amount, an optional
+/// running balance, an optional Dr/Cr/D/C marker, and at most one stray
+/// character (HDFC prints a category dot that extracts as `l`).
+final RegExp _tail = RegExp(
+  r'\s(?<sign>\+)?\s*(?:₹|Rs\.?|INR|C)?\s*(?<amount>' '$_money' r')'
+  r'(?:\s+(?<balance>' '$_money' r'))?'
+  r'(?:\s*(?<dc>Dr|Cr|DR|CR|D|C)\b\.?)?'
+  r'(?:\s+\S)?$',
 );
 
-/// YES card: `16/09/2026 UPI_TEST STORE IND - Ref No: RT26… Miscellaneous Stores 1,500.00 Dr`.
-final RegExp _drCr = RegExp(
-  r'^(?<date>\d{2}/\d{2}/\d{4})\s+(?<desc>.*?)\s*'
-  '$_amt'
-  r'\s+(?<dc>Dr|Cr)$',
+final RegExp _balanceRow = RegExp(
+  r'opening balance|closing balance|balance b/?f|balance c/?f|brought forward|carried forward',
+  caseSensitive: false,
 );
-
-/// HDFC savings: `09/10/26 UPI-TEST SHOP 0000628200000001 09/10/26 40.00 1,000.00`.
-/// Withdrawal and deposit share one column in the text, so the direction comes
-/// from the closing balance.
-final RegExp _savings = RegExp(
-  r'^(?<date>\d{2}/\d{2}/\d{2})\s+(?<desc>.*?)\s+(?<ref>\d{8,})\s+\d{2}/\d{2}/\d{2}\s+'
-  '$_amt'
-  r'\s+(?<balance>[\d,]+\.\d{2})$',
+final RegExp _refMarker = RegExp(
+  r'\s*(?:\bIND\b\s*)?-?\s*\(?\s*Ref(?:\s*No)?\.?\s*[:#].*$',
+  caseSensitive: false,
 );
+final RegExp _refValue = RegExp(
+  r'Ref(?:\s*No)?\.?\s*[:#]\s*([A-Za-z]*\d\w*)',
+  caseSensitive: false,
+);
+final RegExp _wrapsOntoRow = RegExp(r'(?:Ref No:|\(Ref#)$', caseSensitive: false);
 
 /// Masked card number (`1234XXXXXXXX5678`) or account number in the header.
-final RegExp _cardNumber = RegExp(r'\b\d{4,6}X{4,}(?<last4>\d{4})\b');
-final RegExp _accountNumber = RegExp(r'Account No\s*:\s*\d*(?<last4>\d{4})\b');
-final RegExp _openingBalance = RegExp(
-  r'Opening Balance.*\n\s*(?<balance>[\d,]+\.\d{2})',
+final RegExp _cardNumber = RegExp(r'\b\d{4,6}[X*]{4,}(?<last4>\d{4})\b');
+final RegExp _accountNumber = RegExp(
+  r'(?<!Alternate )\b(?:Account|A/c)\s*(?:No|Number)\.?\s*:\s*[X*\d]*?(?<last4>\d{4})\b',
 );
+final RegExp _openingBalance = RegExp(
+  'Opening Balance.*\\n\\s*(?<balance>$_money)',
+);
+
+typedef _Row = ({
+  DateTime date,
+  bool hasTime,
+  String desc,
+  double amount,
+  double? balance,
+  String sign,
+  String dc,
+});
+
+/// [line] read as a statement row, or null when it is not one.
+_Row? _rowOf(String line) {
+  // HDFC cards print `18/09/2026| 15:38`.
+  final String flat = line.replaceFirst('|', ' ');
+  final lead = SmsParser.leadingDate(flat);
+  if (lead == null) return null;
+  final RegExpMatch? tail = _tail.firstMatch(flat);
+  if (tail == null || tail.start < lead.end) return null;
+  return (
+    date: lead.date,
+    hasTime: lead.hasTime && (lead.date.hour != 0 || lead.date.minute != 0),
+    desc: flat.substring(lead.end, tail.start).trim(),
+    amount: _parseMoney(tail.namedGroup('amount'))!,
+    balance: _parseMoney(tail.namedGroup('balance')),
+    sign: tail.namedGroup('sign') ?? '',
+    dc: (tail.namedGroup('dc') ?? '').toUpperCase(),
+  );
+}
 
 /// Every debit in [text], in statement order. Credits (payments received,
 /// cashback, surcharge waivers) are left out: this is for finding spends.
@@ -54,8 +92,8 @@ List<StatementRow> parseStatement(
   String text, {
   Iterable<String> knownPaymentTypes = const <String>[],
 }) {
-  final String paymentType = _paymentTypeOf(text, knownPaymentTypes);
-  double? balance = _money(
+  final String paymentType = statementPaymentType(text, knownPaymentTypes);
+  double? balance = _parseMoney(
     _openingBalance.firstMatch(text)?.namedGroup('balance'),
   );
   final List<StatementRow> rows = <StatementRow>[];
@@ -63,59 +101,62 @@ List<StatementRow> parseStatement(
 
   for (final String raw in text.split('\n')) {
     final String line = raw.trim();
-    final RegExpMatch? card = _hdfcCard.firstMatch(line);
-    final RegExpMatch? drCr = card == null ? _drCr.firstMatch(line) : null;
-    final RegExpMatch? savings = card == null && drCr == null
-        ? _savings.firstMatch(line)
-        : null;
-    final RegExpMatch? m = card ?? drCr ?? savings;
-    if (m == null) {
+    final _Row? row = _rowOf(line);
+    if (row == null) {
       previous = line;
       continue;
     }
-
-    final double amount = _money(m.namedGroup('amount'))!;
-    bool isDebit;
-    if (savings != null) {
-      final double closing = _money(savings.namedGroup('balance'))!;
-      // shortcut: with no opening balance the first row is taken as a debit, fine for spend statements.
-      isDebit = balance == null || closing < balance;
-      balance = closing;
-    } else {
-      isDebit = card != null
-          ? card.namedGroup('credit') == null
-          : drCr!.namedGroup('dc') == 'Dr';
-    }
-
-    // A long description wraps onto the line above the row in the PDF.
-    String desc = m.namedGroup('desc')!;
-    if (RegExp(r'(?:Ref No:|\(Ref#)$').hasMatch(previous)) {
-      desc = '$previous $desc';
-    }
+    final String above = previous;
     previous = line;
+
+    if (_balanceRow.hasMatch(row.desc)) {
+      balance = row.balance ?? row.amount;
+      continue;
+    }
+    // shortcut: a bank that prints 0.00 in the empty withdrawal or deposit column
+    // reads as a zero row and is skipped; split the columns if one turns up.
+    if (row.amount == 0) continue;
+
+    final bool isDebit;
+    if (row.dc.isNotEmpty) {
+      isDebit = row.dc.startsWith('D');
+    } else if (row.balance != null) {
+      // shortcut: with no opening balance the first row is taken as a debit, fine for spend statements.
+      isDebit = balance == null || row.balance! < balance;
+    } else {
+      isDebit = row.sign != '+';
+    }
+    if (row.balance != null) balance = row.balance;
     if (!isDebit) continue;
 
-    final String? time = card?.namedGroup('time');
-    final String reference =
-        RegExp(r'Ref No:\s*([A-Z]*\d\w*)').firstMatch(desc)?.group(1) ??
-        savings?.namedGroup('ref')!.replaceFirst(RegExp(r'^0+'), '') ??
-        '';
+    // A long description wraps onto the line above the row in the PDF.
+    final String desc = _wrapsOntoRow.hasMatch(above) || _merchantOf(row.desc).isEmpty
+        ? '$above ${row.desc}'
+        : row.desc;
     rows.add((
       parsed: ParsedSms(
-        amount: amount,
+        amount: row.amount,
         paymentType: paymentType,
         merchant: _merchantOf(desc),
-        date: _dateOf(m.namedGroup('date')!, time),
+        date: row.date,
         direction: TxnDirection.debit,
-        reference: reference,
+        reference: _referenceOf(desc),
         templateId: 'statement',
-        hasExplicitTime: time != null && time != '00:00',
+        hasExplicitTime: row.hasTime,
       ),
       line: line,
     ));
   }
   return rows;
 }
+
+/// Lines worth handing to the on-device model when no row was recognised:
+/// every line carrying both an amount and a date, which leaves out totals,
+/// limits and other summary figures.
+List<String> statementCandidateLines(String text) => <String>[
+  for (final String raw in text.split('\n'))
+    if (_moneyToken.hasMatch(raw) && _anyDate.hasMatch(raw)) raw.trim(),
+];
 
 /// A spend already in the ledger, as [notYetRecorded] compares it.
 typedef RecordedSpend = ({double amount, DateTime date, String paymentType});
@@ -154,6 +195,73 @@ List<StatementRow> notYetRecorded(
   ];
 }
 
+/// A short, masked sample of the statement's layout for a public GitHub issue:
+/// the column header and up to [maxRows] rows. The name and address block is
+/// never included, because only rows are taken. Card and account numbers,
+/// references, long digit runs and running balances are masked.
+String statementExcerpt(String text, {int maxRows = 10}) {
+  final List<String> lines = text.split('\n').map((String l) => l.trim()).toList();
+  final String header = lines.firstWhere(
+    (String l) =>
+        RegExp(r'^date\b', caseSensitive: false).hasMatch(l) &&
+        RegExp(r'amount|narration|description|details|withdrawal|debit', caseSensitive: false)
+            .hasMatch(l),
+    orElse: () => '',
+  );
+  List<String> rows = lines.where((String l) => _rowOf(l) != null).take(maxRows).toList();
+  if (rows.isEmpty) {
+    // Unknown layout: lines with both an amount and a date somewhere in them.
+    rows = lines
+        .where((String l) => _moneyToken.hasMatch(l) && _anyDate.hasMatch(l))
+        .take(maxRows)
+        .toList();
+  }
+  const PiiSanitizer sanitizer = PiiSanitizer();
+  return <String>[
+    if (header.isNotEmpty) header,
+    for (final String row in rows) _maskRow(sanitizer.sanitize(row).sanitizedText),
+  ].join('\n');
+}
+
+String _maskRow(String row) {
+  String masked = row
+      .replaceAll(_cardNumber, '[CARD]')
+      .replaceAll(RegExp(r'\d{6,}'), '[MASKED]');
+  final List<RegExpMatch> amounts = _moneyToken.allMatches(masked).toList();
+  if (amounts.length > 1) {
+    final RegExpMatch last = amounts.last;
+    masked = masked.replaceRange(last.start, last.end, '[BALANCE]');
+  }
+  return masked;
+}
+
+/// `HDFC Bank`, `YES Bank` — the bank the statement names most often (a row
+/// can name another bank, like an ACH debit), for an issue title. Empty when
+/// none is found.
+String statementBankHint(String text) {
+  final Map<String, int> counts = <String, int>{};
+  for (final RegExpMatch m in RegExp(r'\b([A-Z]{2,})\s+(?:BANK|Bank)\b').allMatches(text)) {
+    counts.update(m.group(1)!, (int n) => n + 1, ifAbsent: () => 1);
+  }
+  if (counts.isEmpty) return '';
+  final String top = counts.entries.reduce((a, b) => b.value > a.value ? b : a).key;
+  return '$top Bank';
+}
+
+/// The card or account the statement is for. A name in [known] with the same
+/// last four digits wins, so imports land on the name SMS alerts already use.
+/// The account number beats a card number, because a savings statement also
+/// prints the debit card used at a POS.
+String statementPaymentType(String text, Iterable<String> known) {
+  final String? account = _accountNumber.firstMatch(text)?.namedGroup('last4');
+  final String? last4 = account ?? _cardNumber.firstMatch(text)?.namedGroup('last4');
+  if (last4 == null) return 'Unknown';
+  for (final String name in known) {
+    if (name.endsWith(last4)) return name;
+  }
+  return account != null ? 'A/c XX$account' : 'Card X$last4';
+}
+
 /// Same last four digits. A name without them (`Cash`, `Unknown`) could be any
 /// account, so it is allowed to match.
 bool _sameAccount(String a, String b) {
@@ -163,45 +271,29 @@ bool _sameAccount(String a, String b) {
   return x == null || y == null || x == y;
 }
 
-int _dayGap(DateTime a, DateTime b) => DateTime.utc(
-  a.year,
-  a.month,
-  a.day,
-).difference(DateTime.utc(b.year, b.month, b.day)).inDays.abs();
+int _dayGap(DateTime a, DateTime b) => DateTime.utc(a.year, a.month, a.day)
+    .difference(DateTime.utc(b.year, b.month, b.day))
+    .inDays
+    .abs();
 
-double? _money(String? s) =>
+double? _parseMoney(String? s) =>
     s == null ? null : double.tryParse(s.replaceAll(',', ''));
 
-/// `16/09/2026` or `09/10/26`, with the row's clock time when it has one.
-DateTime _dateOf(String date, String? time) {
-  final List<int> d = date.split('/').map(int.parse).toList();
-  final List<int> t = (time ?? '00:00').split(':').map(int.parse).toList();
-  return DateTime(d[2] < 100 ? 2000 + d[2] : d[2], d[1], d[0], t[0], t[1]);
-}
-
 /// `UPI_TEST STORE CHENNAI IND - Ref No: RT26… Miscellaneous Stores` →
-/// `TEST STORE CHENNAI`, the same name the SMS alert gives.
-String _merchantOf(String desc) => cleanMerchantName(desc
-    .replaceFirst(RegExp(r'\s*(?:IND\s*)?-\s*Ref No:.*$'), '')
-    .replaceFirst(RegExp(r'\s*\(Ref#.*$'), '')
-    .trim());
+/// `TEST STORE CHENNAI`, the same name the SMS alert gives. Reference numbers
+/// and value dates printed inside the narration are dropped.
+String _merchantOf(String desc) => cleanMerchantName(
+  desc
+      .replaceFirst(_refMarker, '')
+      .replaceAll(RegExp(r'\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b'), '')
+      .replaceAll(RegExp(r'\b\d{8,}\b'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceFirst(RegExp(r'[\s/_.-]+$'), '')
+      .trim(),
+);
 
-/// The account number wins over a card number, because a savings statement
-/// also prints the debit card used at a POS.
-String _paymentTypeOf(String text, Iterable<String> known) {
-  final String bank = text.contains('YES BANK')
-      ? 'YES BANK'
-      : text.contains('HDFC')
-      ? 'HDFC Bank'
-      : '';
-  final String? account = _accountNumber.firstMatch(text)?.namedGroup('last4');
-  final String? last4 =
-      account ?? _cardNumber.firstMatch(text)?.namedGroup('last4');
-  if (last4 == null) return 'Unknown';
-  for (final String name in known) {
-    if (name.endsWith(last4)) return name;
-  }
-  return account != null
-      ? '$bank A/c XX$account'.trim()
-      : '$bank Card X$last4'.trim();
-}
+/// The `Ref No:` / `Ref#` value, else the first long number in the narration.
+String _referenceOf(String desc) =>
+    _refValue.firstMatch(desc)?.group(1) ??
+    RegExp(r'\b\d{10,}\b').firstMatch(desc)?.group(0)?.replaceFirst(RegExp(r'^0+'), '') ??
+    '';

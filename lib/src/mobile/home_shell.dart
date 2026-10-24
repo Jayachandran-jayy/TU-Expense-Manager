@@ -47,6 +47,7 @@ import 'sync_prefs.dart';
 import 'update_service.dart';
 import 'screens/scan_review_screen.dart';
 import 'services/app_lock_service.dart';
+import 'services/github_contribution_helper.dart';
 import 'services/local_llm_service.dart';
 import 'widgets/app_lock_wrapper.dart';
 import 'widgets/paste_transaction_dialog.dart';
@@ -1144,14 +1145,22 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       await FilePicker.clearTemporaryFiles();
     }
 
-    final List<StatementRow> rows = parseStatement(
-      text,
-      knownPaymentTypes: _transactions
-          .map((ExpenseTxn t) => t.paymentType)
-          .toSet(),
-    );
+    final String statement = text;
+    final Set<String> known =
+        _transactions.map((ExpenseTxn t) => t.paymentType).toSet();
+    List<StatementRow> rows =
+        parseStatement(statement, knownPaymentTypes: known);
+    if (rows.isEmpty &&
+        mounted &&
+        await LocalLlmService.instance.isModelAvailable() &&
+        mounted) {
+      rows = await _readStatementWithAi(
+        statement,
+        statementPaymentType(statement, known),
+      );
+    }
     if (rows.isEmpty) {
-      _toast('No spends found in this statement.');
+      _offerStatementShare('No spends found in this statement.', statement);
       return;
     }
     final List<DeletedTxn> deleted = await _db.deletedTransactions();
@@ -1165,8 +1174,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     ]);
     if (!mounted) return;
     if (missing.isEmpty) {
-      _toast(
+      _offerStatementShare(
         'All ${rows.length} spends in this statement are already recorded.',
+        statement,
       );
       return;
     }
@@ -1180,9 +1190,124 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           ],
           database: _db,
           onAdded: _load,
+          onShare: () => _shareStatementFormat(statement),
         ),
       ),
     );
+  }
+
+  /// Reads a statement layout the reader does not know, one line at a time,
+  /// with the on-device model.
+  Future<List<StatementRow>> _readStatementWithAi(
+    String statement,
+    String paymentType,
+  ) {
+    // shortcut: only the first 120 lines with an amount go to the model, one call each; batch them if longer statements turn up.
+    final List<String> lines =
+        statementCandidateLines(statement).take(120).toList();
+    return withProgressModal<List<StatementRow>>(
+      context: context,
+      message: 'Reading statement with on-device AI…',
+      task: (ProgressController progress) async {
+        final List<StatementRow> rows = <StatementRow>[];
+        for (var i = 0; i < lines.length; i++) {
+          progress.update(current: i, total: lines.length);
+          ParsedSms? parsed;
+          try {
+            parsed = await LocalLlmService.instance.parseTransactionText(
+              lines[i],
+              messageType: 'Bank statement line',
+            );
+          } catch (_) {}
+          if (parsed != null && parsed.direction == TxnDirection.debit) {
+            rows.add((
+              parsed: ParsedSms(
+                amount: parsed.amount,
+                paymentType: paymentType,
+                merchant: parsed.merchant,
+                date: parsed.date,
+                direction: TxnDirection.debit,
+                reference: parsed.reference,
+                templateId: 'statement_ai',
+                hasExplicitTime: parsed.hasExplicitTime,
+              ),
+              line: lines[i],
+            ));
+          }
+        }
+        return rows;
+      },
+    );
+  }
+
+  void _offerStatementShare(String message, String statement) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: SnackBarAction(
+            label: 'Share format',
+            onPressed: () => _shareStatementFormat(statement),
+          ),
+        ),
+      );
+  }
+
+  /// Shows the masked excerpt so the user can check and edit it, then opens a
+  /// pre-filled GitHub issue. Nothing is sent until they tap Post.
+  Future<void> _shareStatementFormat(String statement) async {
+    String excerpt = statementExcerpt(statement);
+    final bool? post = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Share this format on GitHub'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                'GitHub issues are public. Card and account numbers, '
+                'references and balances are masked. Remove any names you '
+                "don't want shown.",
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                initialValue: excerpt,
+                minLines: 4,
+                maxLines: 12,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (String v) => excerpt = v,
+              ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Post on GitHub'),
+          ),
+        ],
+      ),
+    );
+    if (post != true || excerpt.trim().isEmpty) return;
+    final bool opened =
+        await GitHubContributionHelper.launchStatementContribution(
+      excerpt: excerpt.trim(),
+      bankHint: statementBankHint(statement),
+    );
+    if (!opened) {
+      _toast('Could not open GitHub. The issue text is on your clipboard.');
+    }
   }
 
   /// Asks for the statement's password. Null when the user cancels.

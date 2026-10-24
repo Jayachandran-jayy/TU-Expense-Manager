@@ -402,6 +402,22 @@ class SmsParser {
     return receivedAt;
   }
 
+  /// A full date (with any clock time) at the very start of [line], in any
+  /// shape [_date] knows, and how many characters it took. Null when the line
+  /// does not open with a date that names its year. Lets the statement reader
+  /// read dates exactly as alerts are read.
+  static ({DateTime date, bool hasTime, int end})? leadingDate(String line) {
+    final match = _leadingDate.firstMatch(line);
+    final raw = match?.namedGroup('date');
+    if (raw == null || _numericShort.hasMatch(raw.trim())) return null;
+    final stamp = _parseDate(raw);
+    return stamp == null
+        ? null
+        : (date: stamp.date, hasTime: stamp.hasTime, end: match!.end);
+  }
+
+  static final RegExp _leadingDate = RegExp('^$_date', caseSensitive: false);
+
   /// Standalone extraction of a merchant name from an SMS message.
   static String? extractMerchantOnly(String body) {
     final parsed = parse(body);
