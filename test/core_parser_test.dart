@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tu_expense_tracker/src/core/parser.dart';
+import 'package:tu_expense_tracker/src/core/rag_exemplars.dart';
 
 void main() {
   group('SmsParser', () {
@@ -390,6 +391,78 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       expect(pHdfcC.reference, '123456789');
       expect(pHdfcC.direction, TxnDirection.credit);
       expect(pHdfcC.isCredit, isTrue);
+    });
+
+    test('parses HDFC Bank BillPay SMS formats from issues #89, #90, and #91', () {
+      // Issue #89: ICICI Prudential Mutual Fund
+      const sms89 = 'Bill Paid!\n'
+          'ICICIPruMF Bill XXBROKER-XXXXXX of Rs. 1000.00 paid on 07-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\n'
+          'BillPay Ref: 987654321012';
+      final p89 = SmsParser.parse(sms89);
+      expect(p89, isNotNull);
+      expect(p89!.templateId, 'hdfc_billpay');
+      expect(p89.amount, 1000.0);
+      expect(p89.merchant, 'ICICIPruMF');
+      expect(p89.paymentType, 'HDFC Bank Account XXXXXXXXXXXXXX');
+      expect(p89.reference, '987654321012');
+      expect(p89.direction, TxnDirection.debit);
+      expect(p89.date.year, 2026);
+      expect(p89.date.month, 10);
+      expect(p89.date.day, 7);
+      expect(p89.hasExplicitTime, isFalse);
+
+      // Issue #90: Axis Mutual Fund
+      const sms90 = 'Bill Paid!\n'
+          'AxisMF Bill XXXXXX-XXXXXX of Rs. 500.00 paid on 05-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\n'
+          'BillPay Ref: 123456789012';
+      final p90 = SmsParser.parse(sms90);
+      expect(p90, isNotNull);
+      expect(p90!.templateId, 'hdfc_billpay');
+      expect(p90.amount, 500.0);
+      expect(p90.merchant, 'AxisMF');
+      expect(p90.paymentType, 'HDFC Bank Account XXXXXXXXXXXXXX');
+      expect(p90.reference, '123456789012');
+      expect(p90.direction, TxnDirection.debit);
+      expect(p90.date.year, 2026);
+      expect(p90.date.month, 10);
+      expect(p90.date.day, 5);
+
+      // Issue #91: Mirae Asset Mutual Fund
+      const sms91 = 'Bill Paid!\n'
+          'MiraeAssetMF Bill XXXXXX-XXXXXX of Rs. 1000.00 paid on 12-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\n'
+          'BillPay Ref: 556677889900';
+      final p91 = SmsParser.parse(sms91);
+      expect(p91, isNotNull);
+      expect(p91!.templateId, 'hdfc_billpay');
+      expect(p91.amount, 1000.0);
+      expect(p91.merchant, 'MiraeAssetMF');
+      expect(p91.paymentType, 'HDFC Bank Account XXXXXXXXXXXXXX');
+      expect(p91.reference, '556677889900');
+      expect(p91.direction, TxnDirection.debit);
+      expect(p91.date.year, 2026);
+      expect(p91.date.month, 10);
+      expect(p91.date.day, 12);
+
+      // Single-line format without optional bill reference or bill ID
+      const singleLine = 'Bill Paid! BESCOM Bill of Rs. 450.50 paid on 01-Nov-2026 from HDFC Bank Account XX5678.';
+      final pSingle = SmsParser.parse(singleLine);
+      expect(pSingle, isNotNull);
+      expect(pSingle!.templateId, 'hdfc_billpay');
+      expect(pSingle.amount, 450.50);
+      expect(pSingle.merchant, 'BESCOM');
+      expect(pSingle.paymentType, 'HDFC Bank Account XX5678');
+      expect(pSingle.reference, '');
+      expect(pSingle.direction, TxnDirection.debit);
+      expect(pSingle.date.month, 11);
+      expect(pSingle.date.day, 1);
+    });
+
+    test('RagExemplars retrieves hdfc_billpay_debit exemplar for HDFC bill messages', () {
+      const sms = 'Bill Paid!\nICICIPruMF Bill XX123 of Rs. 1000 paid on 07-Oct-2026 from HDFC Bank Account XX1234';
+      final exemplars = RagExemplars.findBestExemplars(sms, limit: 1);
+      expect(exemplars, isNotEmpty);
+      expect(exemplars.first.id, 'hdfc_billpay_debit');
+      expect(exemplars.first.bank, 'HDFC Bank');
     });
   });
 }

@@ -175,6 +175,25 @@ class RagExemplars {
         'date': '2026-10-08',
       },
     ),
+
+    // 9. HDFC Bank BillPay
+    RagExemplar(
+      id: 'hdfc_billpay_debit',
+      bank: 'HDFC Bank',
+      keywords: <String>['hdfc', 'bill', 'paid', 'rs', 'billpay', 'account'],
+      rawSms:
+          'Bill Paid!\nICICIPruMF Bill XXBROKER-XXXXXX of Rs. 1000.00 paid on 07-Oct-2026 from HDFC Bank Account XX1234.\nBillPay Ref: [MASKED]',
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'debit',
+        'amount': 1000.0,
+        'currency': 'INR',
+        'merchant': 'ICICIPruMF',
+        'account': '1234',
+        'reference': '[MASKED]',
+        'date': '2026-10-07',
+      },
+    ),
   ];
 
   /// Finds the top [limit] best matching exemplars for the input [messageText].

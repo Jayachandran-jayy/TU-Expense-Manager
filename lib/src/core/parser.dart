@@ -183,6 +183,22 @@ class SmsParser {
           r'\s+(?:on|at|@|for)\s+(?<merchant>[^.\n]*?)\s*(?:[.\n]|$)'),
     ),
 
+    /// HDFC Bank BillPay debit:
+    /// `Bill Paid!\nICICIPruMF Bill XXBROKER-XXXXXX of Rs. 1000.00 paid on 07-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\nBillPay Ref: XXXXXXXXXXXXXX`
+    /// `Bill Paid!\nAxisMF Bill XXXXXX-XXXXXX of Rs. 500.00 paid on 05-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\nBillPay Ref: XXXXXXXXXXXXXX`
+    /// `Bill Paid!\nMiraeAssetMF Bill XXXXXX-XXXXXX of Rs. 1000.00 paid on 12-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\nBillPay Ref: XXXXXXXXXXXXXX`
+    SmsTemplate(
+      id: 'hdfc_billpay',
+      direction: TxnDirection.debit,
+      pattern: _re(r'(?:Bill\s+Paid!?\s+)?'
+          r'(?<merchant>[^\n!]+?)\s+Bill(?:\s+[^\n]*?)?\s+of\s+'
+          '$_cur$_amt'
+          r'\s+paid\s+on\s+'
+          '$_date'
+          r'\s+from\s+(?<instrument>[^\n.]+)\.?'
+          r'(?:\s*BillPay\s+Ref\s*:?\s*(?<ref>[\w\-]+))?'),
+    ),
+
     // -- Unverified: written from each issuer's documented wording, not from
     //    a real message. Replace with the genuine body when one turns up.
 
@@ -313,7 +329,7 @@ class SmsParser {
 
   /// Fallback check for messages that failed strict parsing but still look like transactions.
   static bool looksLikeTransaction(String body) {
-    return RegExp(r'\b(rs\.?|inr|spent|debited|credited|txn|deducted)\b', caseSensitive: false).hasMatch(body);
+    return RegExp(r'\b(rs\.?|inr|spent|debited|credited|txn|deducted|paid)\b', caseSensitive: false).hasMatch(body);
   }
 
   /// A loose, standalone amount extraction for a message that failed a full
