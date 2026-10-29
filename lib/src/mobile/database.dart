@@ -781,34 +781,6 @@ class AppDatabase {
     );
   }
 
-  /// Undoes a merge: the labels folded into [canonical] go back to standing on
-  /// their own. Nothing was overwritten, so this is just dropping the rule.
-  Future<void> separateName({
-    required NameKind kind,
-    required String canonical,
-  }) async {
-    final db = await database;
-    await db.delete(
-      'name_aliases',
-      where: 'kind = ? AND canonical = ?',
-      whereArgs: <Object?>[kind.column, canonical],
-    );
-  }
-
-  /// The lines for one transaction, in the order they were entered — what the
-  /// split editor reopens with.
-  Future<List<TxnSplit>> splitsFor(int transactionId) async {
-    final db = await database;
-    final rows = await db.rawQuery('''
-      SELECT s.category_id, s.amount, c.name AS category_name,
-             c.icon AS category_icon, c.color AS category_color
-      FROM transaction_splits s
-      JOIN categories c ON c.id = s.category_id
-      WHERE s.transaction_id = ?
-      ORDER BY s.position, s.id
-    ''', <Object?>[transactionId]);
-    return rows.map(TxnSplit.fromMap).toList();
-  }
 
   /// Every merchant the ledger has seen, with what it defaults to and how much
   /// has gone through it.
@@ -1759,8 +1731,6 @@ class AppDatabase {
     });
   }
 
-  Future<void> restoreTransaction(DeletedTxn deleted) =>
-      restoreTransactions(<DeletedTxn>[deleted]);
 
   // -------------------------------------------------------------------------
   // 7. INBOX SCAN WATERMARK

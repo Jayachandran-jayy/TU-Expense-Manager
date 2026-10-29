@@ -307,9 +307,6 @@ class AuthStore {
       paths.sessions.write(sessions.map((Session s) => s.toJson()).toList());
 }
 
-/// Argon2id of [password] with [salt], base64.
-String hashPassword(String password, String salt) => _hash(password, salt);
-
 String _hash(String password, String salt) {
   final Argon2Parameters params = Argon2Parameters(
     Argon2Parameters.ARGON2_id,
@@ -352,9 +349,6 @@ String _randomBase64(int bytes) {
     List<int>.generate(bytes, (_) => random.nextInt(256), growable: false),
   );
 }
-
-/// A token or salt of [bytes] bytes, for callers outside this file.
-String randomToken([int bytes = 32]) => _randomBase64(bytes);
 
 /// A fixed salt and hash to check an unknown username against.
 ///

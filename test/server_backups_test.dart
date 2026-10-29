@@ -37,7 +37,6 @@ void main() {
       expect(item.bytes, 10240);
       expect(item.type, 'auto');
       expect(item.isAuto, isTrue);
-      expect(item.isManual, isFalse);
       expect(item.isSafetyBackup, isFalse);
       expect(item.transactionsCount, 42);
       expect(item.note, 'Daily snapshot');

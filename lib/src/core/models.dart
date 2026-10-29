@@ -484,7 +484,6 @@ class ServerBackupItem {
   int get transactionsCount => int.tryParse(counts['transactions'] ?? '') ?? 0;
   bool get isSafetyBackup => type == 'pre_restore';
   bool get isAuto => type == 'auto';
-  bool get isManual => type == 'manual';
 }
 
 /// Information about the server's backup schedule and retention policy.

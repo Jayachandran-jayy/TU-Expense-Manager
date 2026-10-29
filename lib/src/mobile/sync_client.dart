@@ -93,8 +93,6 @@ class SyncOutcome {
 
   bool get failed => error != null;
 
-  int get editsSeen => editsApplied + editsSkipped + editsRejected;
-
   /// One line for the user.
   String describe() {
     if (error != null) return error!;

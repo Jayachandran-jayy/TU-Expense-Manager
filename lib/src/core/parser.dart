@@ -504,10 +504,6 @@ class SmsParser {
   static String _normalize(String value) =>
       value.trim().replaceAll(RegExp(r'\s+'), ' ');
 
-  /// Strips bank gateway transport prefixes like `UPI_`, `UPI-`, `UPI/`, or `UPI `
-  /// from raw merchant names while keeping the merchant's original text casing.
-  static String cleanMerchantName(String value) => tuCleanMerchantName(value);
-
   /// Keeps the message's own date and borrows only the time of day, and only
   /// when the SMS arrived on that same date — a re-scan of the inbox therefore
   /// reproduces the identical timestamp and stays idempotent.
@@ -715,10 +711,7 @@ class _Stamp {
 
 /// Strips bank gateway transport prefixes like `UPI_`, `UPI-`, `UPI/`, or `UPI `
 /// from raw merchant names while keeping the merchant's original text casing.
-String cleanMerchantName(String value) => tuCleanMerchantName(value);
-
-/// Implementation of UPI and bank transport prefix stripper.
-String tuCleanMerchantName(String value) {
+String cleanMerchantName(String value) {
   var trimmed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
   final prefixRe = RegExp(
     r'^(?:upi|pos|info:?\s*pos|info:?|trf\s+to|txn-upi|infavour\s+of)[\s_\-\/:]+',

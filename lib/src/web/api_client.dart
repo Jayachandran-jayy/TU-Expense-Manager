@@ -278,26 +278,6 @@ class ApiClient {
         return ApiResult<int>.ok((pending as num?)?.toInt() ?? 0);
       });
 
-  /// What became of edits already applied, so the browser can say so.
-  Future<ApiResult<List<Map<String, Object?>>>> appliedEdits({
-    required String device,
-  }) =>
-      _guard(() async {
-        final http.Response response = await _client
-            .get(_url('/api/v1/edits/applied'), headers: _headers(device: device))
-            .timeout(kQuickTimeout);
-        if (response.statusCode != 200) {
-          return const ApiResult<List<Map<String, Object?>>>.ok(
-            <Map<String, Object?>>[],
-          );
-        }
-        final Object? raw = _decodeMap(response.body)['applied'];
-        return ApiResult<List<Map<String, Object?>>>.ok(<Map<String, Object?>>[
-          if (raw is List)
-            for (final Object? entry in raw)
-              if (entry is Map<String, Object?>) entry,
-        ]);
-      });
 
   ApiResult<T> _expired<T>() => const ApiResult<Never>.failed(
         'That session has expired. Sign in again.',

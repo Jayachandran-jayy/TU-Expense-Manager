@@ -80,10 +80,6 @@ class AutoSync with WidgetsBindingObserver {
   /// Told when a sync changed the ledger, so the shell can reload.
   VoidCallback? _onChanged;
 
-  /// Whether a sync is in flight. For tests and for the Settings screen, which
-  /// should not offer a manual sync on top of a running automatic one.
-  bool get isBusy => _busy;
-
   /// Begins watching. Safe to call more than once.
   ///
   /// [onChanged] is called on the platform's own thread of control rather than

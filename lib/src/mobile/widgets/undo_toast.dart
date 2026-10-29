@@ -40,9 +40,6 @@ class UndoToastController extends ChangeNotifier {
   _UndoToastEntry? _pending;
   _UndoToastEntry? _active;
 
-  /// True when a toast is currently displayed (or animating in/out).
-  bool get hasActive => _active != null;
-
   /// The currently displayed entry, exposed for tests via the internal getter.
   // ignore: library_private_types_in_public_api
   _UndoToastEntry? get active => _active;
@@ -117,13 +114,6 @@ class UndoToast extends StatefulWidget {
     assert(scope != null,
         'No UndoToast found in the widget tree. Wrap a widget with UndoToast(...).');
     return scope!.controller;
-  }
-
-  /// Returns the nearest [UndoToastController] in the tree, or null if none found.
-  static UndoToastController? maybeControllerOf(BuildContext context) {
-    return context
-        .dependOnInheritedWidgetOfExactType<_UndoToastScope>()
-        ?.controller;
   }
 
   @override
