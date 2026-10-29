@@ -296,11 +296,6 @@ class SyncPrefs {
     );
   }
 
-  Future<void> clearLastPush() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_lastPushKey);
-  }
-
   /// Whether there is enough here to try a sync.
   Future<bool> get isConfigured async =>
       (await baseUrl()) != null && (await token()) != null;
