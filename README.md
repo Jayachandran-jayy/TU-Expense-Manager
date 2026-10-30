@@ -16,12 +16,19 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/sponsors/Jayachandran-jayy">
+    <img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub" />
+  </a>
+</p>
+
+<p align="center">
   <a href="#-overview-what-is-tu-expense-tracker">Overview</a> •
   <a href="#-key-features">Key Features</a> •
   <a href="#-visual-tour">Visual Tour</a> •
   <a href="#-how-to-install-simple-step-by-step-guide">Install Guide</a> •
   <a href="#-technical-architecture--developer-guide">Technical Guide</a> •
-  <a href="#self-hosting-optional">Self-Hosting</a>
+  <a href="#self-hosting-optional">Self-Hosting</a> •
+  <a href="#-support-the-project">Support</a>
 </p>
 
 ---
@@ -1541,3 +1548,12 @@ a set.
   you notice a transaction missing.
 - Flutter warns that `another_telephony` applies the Kotlin Gradle Plugin, which future
   Flutter versions will reject. It builds today, but that dependency is on a clock.
+
+---
+
+## 💖 Support the Project
+
+If TU Expense Tracker saves you time, helps you budget, or keeps your personal financial data private, consider supporting the project:
+
+- **[Sponsor on GitHub](https://github.com/sponsors/Jayachandran-jayy)** — directly support open-source maintenance, continuous updates, and new bank SMS parsers.
+

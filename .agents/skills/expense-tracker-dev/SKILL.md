@@ -325,6 +325,10 @@ docker run -d \
 - Enforced twice: the `No AI co-author trailers` job in `.github/workflows/ci.yml` fails any PR whose commits carry such a line, and `.githooks/commit-msg` refuses it locally. Enable the hook once per clone with `git config core.hooksPath .githooks`.
 - Commit with a plain message in the repo's own style (`feat(scope): summary`), signed by the git user only.
 
+### Sponsorship & Funding Configuration
+- Repository sponsorship is managed via `.github/FUNDING.yml` (`github: [Jayachandran-jayy]`), enabling the native GitHub Sponsor button on the repository and profile.
+
+
 ### Testing & Static Analysis
 - Run all tests: `flutter test`
 - Run static analysis: `dart analyze`
