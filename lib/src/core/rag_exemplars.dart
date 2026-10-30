@@ -194,6 +194,44 @@ class RagExemplars {
         'date': '2026-10-07',
       },
     ),
+
+    // 10. HDFC Bank Debit Mandate (Issue #95)
+    RagExemplar(
+      id: 'hdfc_bank_mandate_debit',
+      bank: 'HDFC Bank',
+      keywords: <String>['hdfc', 'bank', 'debit', 'mandate', 'debited', 'rs'],
+      rawSms:
+          "Debit Alert! Your HDFC Bank A/c xxxxxx has been debited Rs 1117 on 06th Oct' 2026 via Debit Mandate for RAZORPAY_XXXXXX_XXXXX",
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'debit',
+        'amount': 1117.0,
+        'currency': 'INR',
+        'merchant': 'RAZORPAY_XXXXXX_XXXXX',
+        'account': 'xxxxxx',
+        'reference': '[MASKED]',
+        'date': '2026-10-06',
+      },
+    ),
+
+    // 11. Axis Bank Multi-line UPI Debit (Issue #94)
+    RagExemplar(
+      id: 'axis_bank_multiline_debit',
+      bank: 'Axis Bank',
+      keywords: <String>['axis', 'bank', 'debited', 'upi', 'p2m', 'inr'],
+      rawSms:
+          'INR 3732.00 debited\nA/c no. XXXXXX\n21-10-26, 13:52:41\nUPI/P2M/XXXXXXXXXXXXXX/Sri Kauvery Medical\nNot you? SMS BLOCKUPI Cust ID to XXXXXXXXXXXXXX\nAxis Bank',
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'debit',
+        'amount': 3732.0,
+        'currency': 'INR',
+        'merchant': 'Sri Kauvery Medical',
+        'account': 'XXXXXX',
+        'reference': '[MASKED]',
+        'date': '2026-10-21',
+      },
+    ),
   ];
 
   /// Finds the top [limit] best matching exemplars for the input [messageText].

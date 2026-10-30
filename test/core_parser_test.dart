@@ -457,12 +457,57 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       expect(pSingle.date.day, 1);
     });
 
-    test('RagExemplars retrieves hdfc_billpay_debit exemplar for HDFC bill messages', () {
-      const sms = 'Bill Paid!\nICICIPruMF Bill XX123 of Rs. 1000 paid on 07-Oct-2026 from HDFC Bank Account XX1234';
-      final exemplars = RagExemplars.findBestExemplars(sms, limit: 1);
-      expect(exemplars, isNotEmpty);
-      expect(exemplars.first.id, 'hdfc_billpay_debit');
-      expect(exemplars.first.bank, 'HDFC Bank');
+    test('parses HDFC Bank mandate debit alert (Issue #95)', () {
+      const sms = "Debit Alert! Your HDFC Bank A/c xxxxxx has been debited Rs 1117 on 06th Oct' 2026 via Debit Mandate for RAZORPAY_XXXXXX_XXXXX";
+      final parsed = SmsParser.parse(sms);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'general_acct_debited');
+      expect(parsed.amount, 1117.0);
+      expect(parsed.paymentType, 'HDFC Bank A/c xxxxxx');
+      expect(parsed.merchant, 'RAZORPAY_XXXXXX_XXXXX');
+      expect(parsed.direction, TxnDirection.debit);
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 10);
+      expect(parsed.date.day, 6);
+      expect(parsed.hasExplicitTime, isFalse);
+    });
+
+    test('parses Axis Bank multi-line UPI debit alert (Issue #94)', () {
+      const sms = 'INR 3732.00 debited\n'
+          'A/c no. XXXXXX\n'
+          '21-10-26, 13:52:41\n'
+          'UPI/P2M/XXXXXXXXXXXXXX/Sri Kauvery Medical\n'
+          'Not you? SMS BLOCKUPI Cust ID to XXXXXXXXXXXXXX\n'
+          'Axis Bank';
+      final parsed = SmsParser.parse(sms);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'axis_upi_multiline');
+      expect(parsed.amount, 3732.0);
+      expect(parsed.paymentType, 'A/c no. XXXXXX');
+      expect(parsed.merchant, 'Sri Kauvery Medical');
+      expect(parsed.reference, 'XXXXXXXXXXXXXX');
+      expect(parsed.direction, TxnDirection.debit);
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 10);
+      expect(parsed.date.day, 21);
+      expect(parsed.date.hour, 13);
+      expect(parsed.date.minute, 52);
+      expect(parsed.date.second, 41);
+      expect(parsed.hasExplicitTime, isTrue);
+    });
+
+    test('RagExemplars retrieves newly added exemplars', () {
+      const smsHdfc = "Debit Alert! Your HDFC Bank A/c xxxxxx has been debited Rs 1117 on 06th Oct' 2026 via Debit Mandate for RAZORPAY";
+      final exHdfc = RagExemplars.findBestExemplars(smsHdfc, limit: 1);
+      expect(exHdfc, isNotEmpty);
+      expect(exHdfc.first.id, 'hdfc_bank_mandate_debit');
+
+      const smsAxis = 'INR 3732.00 debited\nA/c no. XXXXXX\n21-10-26, 13:52:41\nUPI/P2M/123/Kauvery\nAxis Bank';
+      final exAxis = RagExemplars.findBestExemplars(smsAxis, limit: 1);
+      expect(exAxis, isNotEmpty);
+      expect(exAxis.first.id, 'axis_bank_multiline_debit');
     });
   });
 }
