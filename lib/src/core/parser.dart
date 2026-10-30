@@ -95,8 +95,8 @@ const String _monthPattern =
 const String _date = r'(?<date>'
     r'\d{4}[-/.]\d{2}[-/.]\d{2}(?:[:\sT]+(?:at\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 2026-08-13 07:19:26, 2026-08-13:07:19:26, 2026-08-13T07:19:26
     r'|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 13-08-2026 09:21:35 am, 13-08-2026, 10:29 am, 13.08.2026, 10/08/26
-    '|\\d{1,2}[- /.]' '$_monthPattern' r'[- /.](?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 11-Aug-26 12:30 pm
-    '|' '$_monthPattern' r'\s+\d{1,2},?\s+(?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // Sep 21, 2026 at 11:20:00
+    '|\\d{1,2}(?:st|nd|rd|th)?[- /.]?' '$_monthPattern' r"(?:['\s/.-]+)(?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?" // 11-Aug-26 12:30 pm, 06th Oct' 2026
+    '|' '$_monthPattern' r'\s+\d{1,2}(?:st|nd|rd|th)?,?\s+(?:\d{4}|\d{2})(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // Sep 21, 2026 at 11:20:00
     r'|\d{1,2}[A-Za-z]{3}\d{2,4}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 11Aug26 12:30 pm
     r'|\d{1,2}[-/]\d{1,2}(?:\s*(?:at|,)?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?' // 13-09 14:30, 13-09
     r')';
@@ -244,6 +244,18 @@ class SmsParser {
           r'\s+(?:at|to|@|towards)\s+(?<merchant>[^.\n]*?)\s*(?:[.\n]|$)'),
     ),
 
+    /// Axis Bank multi-line UPI debit:
+    /// `INR 3732.00 debited\nA/c no. XXXXXX\n21-10-26, 13:52:41\nUPI/P2M/XXXXXXXXXXXXXX/Sri Kauvery Medical\nNot you? SMS BLOCKUPI Cust ID to XXXXXXXXXXXXXX\nAxis Bank`
+    SmsTemplate(
+      id: 'axis_upi_multiline',
+      direction: TxnDirection.debit,
+      pattern: _re('$_cur$_amt\\s+debited\\s+'
+          r'(?<instrument>(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*(?:[Xx*]*\d+|[Xx*]{3,}))\s+'
+          '$_date'
+          r'\s+UPI/(?:P2M|P2P)/(?<ref>[\w\-]+)/(?<merchant>[^\n]+?)'
+          r'(?:[.\s]+(?:Not you|SMS BLOCK|Avl|Bal|Available|Axis Bank)|$)'),
+    ),
+
     /// General account debited alerts:
     /// `Dear Customer, your a/c no. XXXXXXXX1234 is debited by Rs. 500.00 on 12-10-26 by UPI-ZOMATO-zomato@icici. Ref no 428192019283.`
     /// `Acct XX456 has been debited with INR 299.00 on 12-Oct-26 for UPI-SWIGGY. Bal: INR 8,210.50.`
@@ -251,15 +263,17 @@ class SmsParser {
     /// `A/C 1234 debited by INR 500.00 on 12-10-26 10:30 trf to FLIPKART - Canara Bank. Bal: INR 12000.00.`
     /// `Bob A/c XX1234 debited by INR 350.00 on 12-10-26 towards UBER Ref 9876543210 Bal: INR 4500.00.`
     /// `Dear Customer, A/C X9012 is debited by Rs. 2450.00 on 12-OCT-26 infavour of AMAZON. Bal: Rs. 15000.00.`
+    /// `Debit Alert! Your HDFC Bank A/c xxxxxx has been debited Rs 1117 on 06th Oct' 2026 via Debit Mandate for RAZORPAY_XXXXXX_XXXXX`
     SmsTemplate(
       id: 'general_acct_debited',
       direction: TxnDirection.debit,
-      pattern: _re(r'(?<instrument>(?:[A-Za-z]+\s+)?(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*[Xx*]*\d+)\s+'
-          r'(?:is|has been)?\s*debited\s+(?:by|with|for)\s+'
+      pattern: _re(r'(?:(?:Debit\s+)?Alert!?\s+)?(?:Dear\s+Customer,?\s+)?(?:[Yy]our\s+)?'
+          r'(?<instrument>(?:[A-Za-z0-9]+\s+)*(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*(?:[Xx*]*\d+|[Xx*]{3,}))\s+'
+          r'(?:is|has been)?\s*debited(?:\s+(?:by|with|for))?\s+'
           '(?:$_cur)?$_amt'
           r'\s+(?:on\s+date|on)\s+'
           '$_date'
-          r'(?:\s+(?:infavour\s+of|towards|trf\s+to|by|to|at|@|for)|[.\s\-]+(?:Info|txn-UPI):\s*)\s*'
+          r'(?:\s+(?:infavour\s+of|towards|trf\s+to|via(?:\s+Debit)?(?:\s+Mandate)?(?:\s+for)?|by|to|at|@|for)|[.\s\-]+(?:Info|txn-UPI):\s*)\s*'
           r'(?<merchant>[^\n]+?)'
           r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Avail|Not you|Call)|$)'),
     ),
@@ -553,16 +567,16 @@ class SmsParser {
     caseSensitive: false,
   );
 
-  /// `11-Aug-26`, `11Aug26`, `11-Aug-2026`, `11 Aug 2026`, with an optional `HH:mm[:ss]` and `am`/`pm`.
+  /// `11-Aug-26`, `11Aug26`, `11-Aug-2026`, `11 Aug 2026`, `06th Oct' 2026`, with an optional `HH:mm[:ss]` and `am`/`pm`.
   static final RegExp _named = RegExp(
-    r'^(\d{1,2})[- /.]?([A-Za-z]{3,9})[- /.]?(\d{2,4})'
+    r'^(\d{1,2})(?:st|nd|rd|th)?[- /.]?([A-Za-z]{3,9})(?:[\s/.-]*|\x27\s*)(\d{2,4})'
     r'(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
     caseSensitive: false,
   );
 
   /// Month-first named: `Aug 11, 2026`, `Sep 21, 2026 at 11:20:00`
   static final RegExp _namedMonthFirst = RegExp(
-    r'^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})'
+    r'^([A-Za-z]{3,9})\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{2,4})'
     r'(?:\s*(?:at|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?)?$',
     caseSensitive: false,
   );
