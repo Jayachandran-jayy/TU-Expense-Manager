@@ -307,7 +307,22 @@ void printScaffolding(ContributionIssue issue, DiagnosticResult diag) {
 
 Future<void> handleReply(ContributionIssue issue, DiagnosticResult diag) async {
   String defaultReply = '';
-  if (diag.isValidTransaction) {
+  if (diag.isAlreadyRecognized) {
+    final String dateStr = diag.parsedResult != null
+        ? '${diag.parsedResult!.date.year}-${diag.parsedResult!.date.month.toString().padLeft(2, '0')}-${diag.parsedResult!.date.day.toString().padLeft(2, '0')}'
+        : '';
+    final String refStr = (diag.parsedResult?.reference.isNotEmpty ?? false)
+        ? ', and reference (${diag.parsedResult!.reference})'
+        : '';
+
+    defaultReply = '''Thank you for the contribution!
+
+This format is already recognized by our SMS parser (under the `${diag.parsedResult?.templateId}` template), which parses the amount (₹${diag.parsedResult?.amount}), date ($dateStr), merchant ("${diag.parsedResult?.merchant}")$refStr.
+
+If this transaction is not showing up or not being recognized in your app's transaction list, please let us know with details (such as whether it landed in your Unadded SMS inbox) so we can investigate further.
+
+We will keep this issue open for **7 days** for any comments or updates. If there is no further reply within 7 days, it will be automatically closed.''';
+  } else if (diag.isValidTransaction) {
     defaultReply =
         'Thank you for the contribution! This format has been accepted. To get it reflected immediately once merged, you can download the latest build from GitHub Releases or wait for the next F-Droid release.';
   } else {

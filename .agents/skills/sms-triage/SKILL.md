@@ -26,7 +26,10 @@ The triage workflow has 4 stages:
    - Add regression tests in `test/core_parser_test.dart`.
    - Verify zero regressions: `flutter test` and `dart analyze`.
 4. **Reply & Close**:
-   - Use `--reply` to post the acceptance or polite rejection comment directly to the GitHub issue with local user confirmation.
+   - Use `--reply` to post the appropriate response comment directly to the GitHub issue with local developer confirmation:
+     - **Accepted Format**: Thank the contributor, confirm acceptance, and inform them it will be in the next release/build.
+     - **Already Recognized Format**: Inform the contributor that the format is already matched by template `<template_id>` with extracted details (amount, date, merchant). Ask them to report if it didn't show up in their transactions or landed in Unadded SMS, and specify that the issue remains open for **7 days** before auto-closing.
+     - **Invalid Alert**: Explain courteously why non-completed messages (mandates due, standing instructions scheduled, OTPs) cannot be added.
    - Link closed issues in the commit/PR: `Closes #<issue_number>`.
 
 ---
