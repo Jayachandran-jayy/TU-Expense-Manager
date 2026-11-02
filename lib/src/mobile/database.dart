@@ -5,6 +5,7 @@
 /// which is exactly why the web build reads a snapshot instead.
 library;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -47,6 +48,15 @@ class AppDatabase {
   int? _uncategorizedId;
 
   Future<Database> get database => _opening ??= _open();
+
+  @visibleForTesting
+  void setDatabaseForTesting(Database? db) {
+    _opening = db == null ? null : Future<Database>.value(db);
+    _uncategorizedId = null;
+  }
+
+  @visibleForTesting
+  Future<void> onCreateForTesting(Database db, int version) => _onCreate(db, version);
 
   Future<Database> _open() async {
     final path = p.join(await getDatabasesPath(), 'expense_manager.db');

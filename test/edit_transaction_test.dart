@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:tu_expense_tracker/src/core/edits.dart';
 import 'package:tu_expense_tracker/src/core/models.dart';
 import 'package:tu_expense_tracker/src/core/parser.dart';
 import 'package:tu_expense_tracker/src/core/splits.dart';
+import 'package:tu_expense_tracker/src/mobile/database.dart';
 import 'package:tu_expense_tracker/src/mobile/screens/add_transaction_screen.dart';
 import 'package:tu_expense_tracker/src/mobile/screens/transaction_actions_sheet.dart';
 import 'package:tu_expense_tracker/src/web/edit_sheets.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
 
   const categories = <ExpenseCategory>[
     ExpenseCategory(id: 1, name: 'Uncategorized'),
@@ -225,6 +228,70 @@ void main() {
       expect(result!.amount, 350.0);
       expect(result!.merchant, 'Swiggy');
       expect(result!.note, 'Lunch with team');
+    });
+  });
+
+  group('AppDatabase.updateTransaction SQLite Integration', () {
+    late Database testDb;
+    final db = AppDatabase.instance;
+
+    setUp(() async {
+      testDb = await databaseFactoryFfi.openDatabase(
+        inMemoryDatabasePath,
+        options: OpenDatabaseOptions(
+          version: AppDatabase.schemaVersion,
+          onConfigure: (d) => d.execute('PRAGMA foreign_keys = ON'),
+          onCreate: db.onCreateForTesting,
+        ),
+      );
+      db.setDatabaseForTesting(testDb);
+    });
+
+    tearDown(() async {
+      db.setDatabaseForTesting(null);
+      await testDb.close();
+    });
+
+    test('updates transaction fields, sets tombstone for old natural key, preserves splits', () async {
+      final originalSms = ParsedSms(
+        amount: 500.0,
+        merchant: 'Swiggy',
+        date: DateTime(2026, 11, 1, 10, 0),
+        direction: TxnDirection.debit,
+        paymentType: 'HDFC Card 1234',
+        reference: 'UPI/987654321',
+      );
+
+      final int insertedId = await db.insertParsed(originalSms);
+      expect(insertedId, greaterThan(0));
+
+      final newDate = DateTime(2026, 11, 2, 14, 45);
+      await db.updateTransaction(
+        id: insertedId,
+        amount: 450.0,
+        merchant: 'Swiggy Gourmet',
+        date: newDate,
+        categoryId: (await db.categories()).first.id,
+        paymentType: 'HDFC Card 1234',
+        direction: TxnDirection.debit,
+        reference: 'UPI/987654321',
+        note: 'Applied voucher',
+      );
+
+      final txns = await db.transactions();
+      final txn = txns.firstWhere((t) => t.id == insertedId);
+      expect(txn.amount, 450.0);
+      expect(txn.merchant, 'Swiggy Gourmet');
+      expect(txn.date, newDate);
+      expect(txn.note, 'Applied voucher');
+
+      // Edge case: Original SMS must not be re-imported
+      expect(await db.isDuplicateOrDeleted(originalSms), isTrue);
+      expect(await db.insertParsed(originalSms), 0);
+
+      // Edge case: Edited row should not show in deleted trash
+      final deleted = await db.deletedTransactions();
+      expect(deleted.any((d) => d.originalId == insertedId), isFalse);
     });
   });
 }
