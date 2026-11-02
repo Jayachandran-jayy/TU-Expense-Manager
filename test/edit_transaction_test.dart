@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
@@ -231,11 +232,12 @@ void main() {
     });
   });
 
-  group('AppDatabase.updateTransaction SQLite Integration', () {
-    late Database testDb;
+  group('AppDatabase.updateTransaction SQLite Integration', skip: kIsWeb, () {
+    Database? testDb;
     final db = AppDatabase.instance;
 
     setUp(() async {
+      if (kIsWeb) return;
       testDb = await databaseFactoryFfi.openDatabase(
         inMemoryDatabasePath,
         options: OpenDatabaseOptions(
@@ -248,11 +250,12 @@ void main() {
     });
 
     tearDown(() async {
+      if (kIsWeb) return;
       db.setDatabaseForTesting(null);
-      await testDb.close();
+      await testDb?.close();
     });
 
-    test('updates transaction fields, sets tombstone for old natural key, preserves splits', () async {
+    test('updates transaction fields, sets tombstone for old natural key, preserves splits', testOn: 'vm', () async {
       final originalSms = ParsedSms(
         amount: 500.0,
         merchant: 'Swiggy',
