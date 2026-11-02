@@ -498,6 +498,42 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       expect(parsed.hasExplicitTime, isTrue);
     });
 
+    test('parses HDFC Bank cash deposit credit alert (Issue #99)', () {
+      const sms =
+          'Deposited! INR 1,000.00 in HDFC Bank A/c XX*XXXX On 29/10/26 16:06:56 At HMT LAYOUT Via Cash Deposit Machine Bal: INR [MASKED]';
+      final parsed = SmsParser.parse(sms);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'hdfc_cash_deposit');
+      expect(parsed.amount, 1000.0);
+      expect(parsed.paymentType, 'HDFC Bank A/c XX*XXXX');
+      expect(parsed.merchant, 'Cash Deposit Machine');
+      expect(parsed.direction, TxnDirection.credit);
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 10);
+      expect(parsed.date.day, 29);
+      expect(parsed.date.hour, 16);
+      expect(parsed.date.minute, 6);
+      expect(parsed.date.second, 56);
+      expect(parsed.hasExplicitTime, isTrue);
+    });
+
+    test('parses HDFC Bank online banking debit alert (Issue #100)', () {
+      const sms =
+          'Amt Deducted! Rs.11500 from your HDFC Bank A/c XX*XXXX for NEFT txn via HDFC Bank Online Banking Not you?Call 18002586161/SMS BLOCK OB to [PHONE]';
+      final receivedAt = DateTime(2026, 11, 1, 14, 30, 0);
+      final parsed = SmsParser.parse(sms, receivedAt: receivedAt);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'hdfc_netbanking_deducted');
+      expect(parsed.amount, 11500.0);
+      expect(parsed.paymentType, 'HDFC Bank A/c XX*XXXX');
+      expect(parsed.merchant, 'NEFT');
+      expect(parsed.direction, TxnDirection.debit);
+      expect(parsed.date, receivedAt);
+      expect(parsed.hasExplicitTime, isFalse);
+    });
+
     test('RagExemplars retrieves newly added exemplars', () {
       const smsHdfc = "Debit Alert! Your HDFC Bank A/c xxxxxx has been debited Rs 1117 on 06th Oct' 2026 via Debit Mandate for RAZORPAY";
       final exHdfc = RagExemplars.findBestExemplars(smsHdfc, limit: 1);
@@ -508,6 +544,16 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       final exAxis = RagExemplars.findBestExemplars(smsAxis, limit: 1);
       expect(exAxis, isNotEmpty);
       expect(exAxis.first.id, 'axis_bank_multiline_debit');
+
+      const smsCdm = 'Deposited! INR 1,000.00 in HDFC Bank A/c XX*XXXX On 29/10/26 At HMT LAYOUT Via Cash Deposit Machine';
+      final exCdm = RagExemplars.findBestExemplars(smsCdm, limit: 1);
+      expect(exCdm, isNotEmpty);
+      expect(exCdm.first.id, 'hdfc_cash_deposit_credit');
+
+      const smsNeft = 'Amt Deducted! Rs.11500 from your HDFC Bank A/c XX*XXXX for NEFT txn via HDFC Bank Online Banking';
+      final exNeft = RagExemplars.findBestExemplars(smsNeft, limit: 1);
+      expect(exNeft, isNotEmpty);
+      expect(exNeft.first.id, 'hdfc_netbanking_debit');
     });
   });
 }

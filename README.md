@@ -61,11 +61,12 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 - **Accurate Charting**: Filtered views and monthly reports count only the exact split lines corresponding to each category.
 
 ### 3. ⚡ Automated Bank SMS Ingestion & Manual Cash Entry
-- **Automatic Intake**: Reads transactional SMS from major Indian banks and UPI gateways in real time without waking up unnecessary background services. Supported formats include Indian Bank, HDFC (multiline, card, BillPay, & debit mandates), YES Bank, SBI, ICICI, Axis Bank (single-line & multi-line UPI), Kotak Mahindra, Canara Bank, Bank of Baroda, IDFC FIRST Bank, Federal Bank, Punjab National Bank (PNB), Union Bank of India, and RuPay card UPI.
+- **Automatic Intake**: Reads transactional SMS from major Indian banks and UPI gateways in real time without waking up unnecessary background services. Supported formats include Indian Bank, HDFC (multiline, card, BillPay, debit mandates, NetBanking online transfers, & Cash Deposit Machine alerts), YES Bank, SBI, ICICI, Axis Bank (single-line & multi-line UPI), Kotak Mahindra, Canara Bank, Bank of Baroda, IDFC FIRST Bank, Federal Bank, Punjab National Bank (PNB), Union Bank of India, and RuPay card UPI.
 - **Inverted Date & Extended Ref Support**: Intelligently parses SMS structures where transaction dates precede merchants (e.g. `Sent Rs.90.00 from A/c *4668 on 12-10-26 to M/S.RAJALAKSHMI EDUCATION SERV...`) and captures `RRN`, `UTR`, or `Ref no` reference codes.
 - **Track Received Amounts Toggle (Off by Default)**: Control whether incoming credits and refunds appear in your transaction stream and monthly summaries. When disabled, your ledger focuses exclusively on actual spending; enable it anytime in Settings to track received income with green `+₹` badges and net cash flow stats.
+- **Full Transaction Editing**: Need to fix an amount, change a date/time, correct a merchant, or adjust a category? Tap any transaction and select **Edit transaction** to modify its price, date, time, merchant, category/splits, payment method, direction, or note on mobile or via the web dashboard.
 - **Manual Cash Tracking**: Need to record cash payments or transactions from unlinked accounts? Tap **+ Add Transaction** to log entries manually in seconds.
-- **Safe & Idempotent**: Multi-layer deduplication prevents double-counting, even if bank alerts are received multiple times or rescanned.
+- **Safe & Idempotent**: Multi-layer deduplication prevents double-counting, even if bank alerts are received multiple times or rescanned. Whenever an auto-added transaction's amount or date is edited, the system safely tombstones its old natural key in the background so future SMS inbox rescans never re-import the unedited alert.
 - **Accurate Clock Time Extraction**: Accurately extracts explicit transaction clock times from diverse SMS timestamp formats (including ISO, commas, dots, `at`, and month-first names). When SMS bodies contain only a calendar date, the parser borrows the message arrival time (or defaults to midnight for manual paste) rather than zeroing timestamps.
 
 ### 4. 🧠 On-Device AI SMS Parser & Fallback (Optional & 100% Offline)
@@ -332,6 +333,8 @@ actually carries.
 | "spent using", merchant after the date | `INR 160.00 spent using BANK Card XX8008 on 11-Aug-26 on MERCHANT.` | debit |
 | HDFC RuPay Card UPI alert | `Txn Rs.506.90 On HDFC Bank Card 8174 At SV2512112258548450219373@ by UPI 789574846858 On 13-09` | debit |
 | HDFC Bank BillPay alert | `Bill Paid!\nICICIPruMF Bill XXBROKER-XXXXXX of Rs. 1000.00 paid on 07-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\nBillPay Ref: 987654321012` | debit |
+| HDFC NetBanking online transfer alert | `Amt Deducted! Rs.11500 from your HDFC Bank A/c XX*XXXX for NEFT txn via HDFC Bank Online Banking Not you?Call 18002586161/SMS BLOCK OB to [PHONE]` | debit |
+| HDFC Cash Deposit Machine (CDM) alert | `Deposited! INR 1,000.00 in HDFC Bank A/c XX*XXXX On 29/10/26 16:06:56 At HMT LAYOUT Via Cash Deposit Machine Bal: INR [MASKED]` | credit |
 
 **Unconfirmed** — written from wording that is common across issuers, *not* from a real
 message. Replace them with the genuine body when one turns up:
@@ -826,9 +829,10 @@ Four facets, accessible via modern filter trigger buttons with count badges and 
 The list is the working surface — there is nowhere else to go to change something:
 
 - **Tap any transaction** to open its actions sheet — amount, card, date, categories and
-  any note, over **Change category**, **Edit merchant**, **Add / Edit note**, **Split** and **Delete**.
+  any note, over **Edit transaction**, **Change category**, **Edit merchant**, **Add / Edit note**, **Split** and **Delete**.
   Uncategorized rows are flagged in the error color. A split row's pill names its first
   category and counts the rest ("Grocery +2"); the sheet lists them all with their amounts.
+- **Edit transaction** gives you full control over any transaction — whether auto-added from an SMS/email or entered manually. Modify the amount/price, date, clock time, merchant name, category, multi-category splits, payment method, direction (debit or credit), and notes. If you change the amount or date of an auto-added transaction, the system automatically inserts a tombstone with its original natural key so that future SMS rescans never re-import the unedited alert, while cleanly excluding active edited transactions from the Deleted Transactions screen.
 - **Edit merchant** allows renaming cryptic gateway or terminal IDs (e.g., `SV2512112258548450219373`)
   into readable merchant names directly from the ledger. An optional checkbox lets you apply
   the new merchant name to all past transactions with the same original name at once.
@@ -1412,8 +1416,9 @@ TLS is a reverse-proxy configuration away if you want it; ZimaOS already runs Ca
 ### Editing from the browser
 
 The browser can edit, and does it by **queueing intent rather than writing**.
-Clicking a row of the table opens a dialog offering four things — change the
-category, edit the note, split across categories, delete — and each one posts an
+Clicking a row of the table opens a dialog offering five things — edit transaction
+details (amount, date, merchant, direction, and payment method), change the category,
+edit the note, split across categories, delete — and each one posts an
 edit that the phone applies on its next sync. (A delete is also on each row
 directly, appearing on hover: a mouse cannot swipe, which is how the phone offers
 it.) The dialog is a dialog rather than a bottom sheet for the same reason the list
