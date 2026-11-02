@@ -5,6 +5,7 @@
 /// which is exactly why the web build reads a snapshot instead.
 library;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -47,6 +48,15 @@ class AppDatabase {
   int? _uncategorizedId;
 
   Future<Database> get database => _opening ??= _open();
+
+  @visibleForTesting
+  void setDatabaseForTesting(Database? db) {
+    _opening = db == null ? null : Future<Database>.value(db);
+    _uncategorizedId = null;
+  }
+
+  @visibleForTesting
+  Future<void> onCreateForTesting(Database db, int version) => _onCreate(db, version);
 
   Future<Database> _open() async {
     final path = p.join(await getDatabasesPath(), 'expense_manager.db');
@@ -1344,6 +1354,112 @@ class AppDatabase {
     });
   }
 
+  /// Updates an existing transaction's core fields and splits.
+  ///
+  /// If the natural key (amount, merchant, date, direction, reference) changed,
+  /// the old natural key is tombstoned in `deleted_transactions` so future SMS
+  /// inbox rescans do not re-import the original unedited alert.
+  Future<void> updateTransaction({
+    required int id,
+    required double amount,
+    required String merchant,
+    required DateTime date,
+    required int categoryId,
+    String paymentType = 'Cash',
+    TxnDirection direction = TxnDirection.debit,
+    String reference = '',
+    String note = '',
+    List<TxnSplit> splits = const <TxnSplit>[],
+  }) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final currentRows = await txn.query(
+        'transactions',
+        where: 'id = ?',
+        whereArgs: <Object?>[id],
+        limit: 1,
+      );
+      if (currentRows.isEmpty) return;
+
+      final current = currentRows.first;
+      final double oldAmount = (current['amount'] as num).toDouble();
+      final String oldMerchant = (current['merchant'] as String?) ?? '';
+      final int oldDate = current['date'] as int;
+      final String oldDirection = (current['direction'] as String?) ?? 'debit';
+      final String oldReference = (current['reference'] as String?) ?? '';
+      final String oldPaymentType =
+          (current['payment_type'] as String?) ?? 'Cash';
+      final int oldCategoryId = current['category_id'] as int;
+      final String oldNote = (current['note'] as String?) ?? '';
+
+      final bool naturalKeyChanged = oldAmount != amount ||
+          oldMerchant.toLowerCase() != merchant.trim().toLowerCase() ||
+          oldDate != date.millisecondsSinceEpoch ||
+          oldDirection != direction.name ||
+          oldReference != reference.trim();
+
+      if (naturalKeyChanged) {
+        await txn.insert(
+          'deleted_transactions',
+          <String, Object?>{
+            'amount': oldAmount,
+            'merchant': oldMerchant,
+            'date': oldDate,
+            'direction': oldDirection,
+            'reference': oldReference,
+            'payment_type': oldPaymentType,
+            'category_id': oldCategoryId,
+            'original_id': id,
+            'deleted_at': DateTime.now().millisecondsSinceEpoch,
+            'splits_json': null,
+            'note': oldNote,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      final int dominantCategoryId = splits.isNotEmpty
+          ? splits
+              .reduce((TxnSplit a, TxnSplit b) => b.amount > a.amount ? b : a)
+              .categoryId
+          : categoryId;
+
+      await txn.update(
+        'transactions',
+        <String, Object?>{
+          'amount': amount,
+          'payment_type':
+              paymentType.trim().isEmpty ? 'Cash' : paymentType.trim(),
+          'merchant': merchant.trim(),
+          'date': date.millisecondsSinceEpoch,
+          'category_id': dominantCategoryId,
+          'direction': direction.name,
+          'reference': reference.trim(),
+          'note': cleanNote(note),
+        },
+        where: 'id = ?',
+        whereArgs: <Object?>[id],
+      );
+
+      await txn.delete(
+        'transaction_splits',
+        where: 'transaction_id = ?',
+        whereArgs: <Object?>[id],
+      );
+
+      if (splits.isNotEmpty) {
+        for (var i = 0; i < splits.length; i++) {
+          await txn.insert('transaction_splits', <String, Object?>{
+            'transaction_id': id,
+            'category_id': splits[i].categoryId,
+            'amount': splits[i].amount,
+            'position': i,
+          });
+        }
+      }
+    });
+  }
+
   // -------------------------------------------------------------------------
   // 5. LEARN THE MAPPING + BACKFILL
   // -------------------------------------------------------------------------
@@ -1659,6 +1775,7 @@ class AppDatabase {
              c.color AS category_color
       FROM deleted_transactions d
       LEFT JOIN categories c ON c.id = d.category_id
+      WHERE d.original_id NOT IN (SELECT id FROM transactions) OR d.original_id IS NULL
       ORDER BY d.deleted_at DESC, d.date DESC
     ''');
     return rows.map(DeletedTxn.fromMap).toList();

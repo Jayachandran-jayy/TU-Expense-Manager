@@ -7,7 +7,7 @@ import '../../core/models.dart';
 import '../../core/splits.dart';
 import '../../ui_shared/palette.dart';
 
-enum TxnAction { categorize, note, split, editMerchant, mergeMerchant, mergeCard, delete }
+enum TxnAction { editTransaction, categorize, note, split, editMerchant, mergeMerchant, mergeCard, delete }
 
 class TransactionActionsSheet extends StatelessWidget {
   const TransactionActionsSheet({
@@ -116,6 +116,13 @@ class TransactionActionsSheet extends StatelessWidget {
               ),
             ],
             const Divider(height: 28),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.edit_note_outlined),
+              title: const Text('Edit transaction'),
+              subtitle: const Text('Price, date, time, and details'),
+              onTap: () => Navigator.pop(context, TxnAction.editTransaction),
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.label_outline),

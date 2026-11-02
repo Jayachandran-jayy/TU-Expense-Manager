@@ -23,11 +23,12 @@ import 'package:intl/intl.dart';
 
 import '../core/constants.dart';
 import '../core/models.dart';
+import '../core/parser.dart';
 import '../core/splits.dart';
 import '../ui_shared/palette.dart';
 
 /// What the user picked out of the actions dialog.
-enum WebTxnAction { setCategory, setNote, split, delete }
+enum WebTxnAction { editTxn, setCategory, setNote, split, delete }
 
 /// The actions a row offers in a browser.
 ///
@@ -74,6 +75,13 @@ Future<WebTxnAction?> showWebTxnActions(
                   ),
                 ),
                 const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.edit_note_outlined),
+                  title: const Text('Edit transaction'),
+                  subtitle: const Text('Price, date, time, and details'),
+                  onTap: () =>
+                      Navigator.pop(dialogContext, WebTxnAction.editTxn),
+                ),
                 ListTile(
                   leading: const Icon(Icons.label_outline),
                   title: const Text('Change category'),
@@ -564,4 +572,268 @@ class _WebSplitDialogState extends State<_WebSplitDialog> {
             ),
         ],
       );
+}
+
+class WebEditTxnResult {
+  const WebEditTxnResult({
+    required this.amount,
+    required this.merchant,
+    required this.date,
+    required this.categoryId,
+    required this.paymentType,
+    required this.direction,
+    required this.note,
+    this.splits = const <TxnSplit>[],
+  });
+
+  final double amount;
+  final String merchant;
+  final DateTime date;
+  final int categoryId;
+  final String paymentType;
+  final TxnDirection direction;
+  final String note;
+  final List<TxnSplit> splits;
+}
+
+Future<WebEditTxnResult?> editWebTransaction(
+  BuildContext context, {
+  required ExpenseTxn txn,
+  required List<ExpenseCategory> categories,
+  required NumberFormat money,
+}) =>
+    showDialog<WebEditTxnResult>(
+      context: context,
+      builder: (BuildContext dialogContext) => _WebEditTxnDialog(
+        txn: txn,
+        categories: categories,
+        money: money,
+      ),
+    );
+
+class _WebEditTxnDialog extends StatefulWidget {
+  const _WebEditTxnDialog({
+    required this.txn,
+    required this.categories,
+    required this.money,
+  });
+
+  final ExpenseTxn txn;
+  final List<ExpenseCategory> categories;
+  final NumberFormat money;
+
+  @override
+  State<_WebEditTxnDialog> createState() => _WebEditTxnDialogState();
+}
+
+class _WebEditTxnDialogState extends State<_WebEditTxnDialog> {
+  late final TextEditingController _amountController = TextEditingController(
+    text: widget.txn.amount.toStringAsFixed(2),
+  );
+  late final TextEditingController _merchantController = TextEditingController(
+    text: widget.txn.merchant,
+  );
+  late final TextEditingController _noteController = TextEditingController(
+    text: widget.txn.note,
+  );
+  late final TextEditingController _paymentTypeController =
+      TextEditingController(
+    text: widget.txn.paymentType,
+  );
+
+  late DateTime _date = widget.txn.date;
+  late int _categoryId = widget.txn.categoryId;
+  late TxnDirection _direction = widget.txn.direction;
+  String? _error;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _merchantController.dispose();
+    _noteController.dispose();
+    _paymentTypeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_date),
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _date = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime?.hour ?? _date.hour,
+        pickedTime?.minute ?? _date.minute,
+      );
+    });
+  }
+
+  void _submit() {
+    final double? parsedAmount = double.tryParse(_amountController.text.trim());
+    if (parsedAmount == null || parsedAmount <= 0) {
+      setState(() => _error = 'Enter a valid amount greater than 0');
+      return;
+    }
+    final String merchant = _merchantController.text.trim();
+    if (merchant.isEmpty) {
+      setState(() => _error = 'Merchant name cannot be empty');
+      return;
+    }
+
+    Navigator.pop(
+      context,
+      WebEditTxnResult(
+        amount: parsedAmount,
+        merchant: merchant,
+        date: _date,
+        categoryId: _categoryId,
+        paymentType: _paymentTypeController.text.trim().isEmpty
+            ? 'Cash'
+            : _paymentTypeController.text.trim(),
+        direction: _direction,
+        note: _noteController.text.trim(),
+        splits: widget.txn.isSplit && parsedAmount == widget.txn.amount
+            ? widget.txn.splits
+            : const <TxnSplit>[],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final DateFormat formatter = DateFormat('d MMM yyyy, h:mm a');
+    return AlertDialog(
+      title: const Text('Edit Transaction'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    _error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: _amountController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Amount',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SegmentedButton<TxnDirection>(
+                      segments: const <ButtonSegment<TxnDirection>>[
+                        ButtonSegment(
+                          value: TxnDirection.debit,
+                          label: Text('Debit'),
+                        ),
+                        ButtonSegment(
+                          value: TxnDirection.credit,
+                          label: Text('Credit'),
+                        ),
+                      ],
+                      selected: <TxnDirection>{_direction},
+                      onSelectionChanged: (Set<TxnDirection> s) =>
+                          setState(() => _direction = s.first),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _merchantController,
+                decoration: const InputDecoration(
+                  labelText: 'Merchant',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Date & Time'),
+                subtitle: Text(formatter.format(_date)),
+                trailing: const Icon(Icons.calendar_today_outlined),
+                onTap: _pickDate,
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int>(
+                initialValue: widget.categories.any((c) => c.id == _categoryId)
+                    ? _categoryId
+                    : widget.categories.firstOrNull?.id,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  border: OutlineInputBorder(),
+                ),
+                items: <DropdownMenuItem<int>>[
+                  for (final ExpenseCategory cat in widget.categories)
+                    DropdownMenuItem<int>(
+                      value: cat.id,
+                      child: Text(cat.name),
+                    ),
+                ],
+                onChanged: (int? v) {
+                  if (v != null) setState(() => _categoryId = v);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _paymentTypeController,
+                decoration: const InputDecoration(
+                  labelText: 'Payment Method / Card',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _noteController,
+                maxLength: kNoteMaxLength,
+                decoration: const InputDecoration(
+                  labelText: 'Note',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
 }

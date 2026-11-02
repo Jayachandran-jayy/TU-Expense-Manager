@@ -861,6 +861,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
     if (!mounted || action == null) return;
     switch (action) {
+      case TxnAction.editTransaction:
+        await _editTransaction(txn);
       case TxnAction.categorize:
         await _pickCategory(txn);
       case TxnAction.note:
@@ -890,6 +892,26 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         onChanged: _load,
       ),
     ));
+  }
+
+  Future<void> _editTransaction(ExpenseTxn txn) async {
+    final view = _derive();
+    final allTypes = await AppDatabase.instance.paymentMethods();
+    if (!mounted) return;
+    final bool? changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => AddTransactionScreen(
+          categories: _categories,
+          merchants: view.merchants,
+          paymentTypes: allTypes,
+          existingTxn: txn,
+        ),
+      ),
+    );
+    if (changed == true) {
+      await _load();
+      _toast('Transaction updated');
+    }
   }
 
   Future<void> _splitTransaction(ExpenseTxn txn) async {
