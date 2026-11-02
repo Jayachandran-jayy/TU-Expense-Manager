@@ -35,6 +35,7 @@ import '../core/constants.dart';
 import '../core/edits.dart';
 import '../core/ledger.dart';
 import '../core/models.dart';
+import '../core/parser.dart';
 import '../core/splits.dart';
 import 'database.dart';
 import 'sync_prefs.dart';
@@ -729,6 +730,40 @@ class SyncClient {
 
       case EditOp.deleteTxn:
         await _db.deleteTransaction(target);
+
+      case EditOp.updateTxn:
+        final double amount = edit.amount ?? target.amount;
+        final String merchant = edit.merchant ?? target.rawMerchant;
+        final DateTime date = edit.date ?? target.date;
+        final int categoryId = edit.categoryId ?? target.categoryId;
+        final String paymentType = edit.paymentType ?? target.paymentType;
+        final TxnDirection direction = edit.direction ?? target.direction;
+        final String note = edit.note ?? target.note;
+        final List<({int categoryId, double amount})> lines = edit.splitLines;
+        final Map<int, String> names = <int, String>{
+          for (final ExpenseCategory c in await _db.categories()) c.id: c.name,
+        };
+        final List<TxnSplit> splits = <TxnSplit>[
+          for (final ({int categoryId, double amount}) line in lines)
+            TxnSplit(
+              categoryId: line.categoryId,
+              categoryName: names[line.categoryId] ?? kUncategorized,
+              amount: line.amount,
+            ),
+        ];
+
+        await _db.updateTransaction(
+          id: target.id,
+          amount: amount,
+          merchant: merchant,
+          date: date,
+          categoryId: categoryId,
+          paymentType: paymentType,
+          direction: direction,
+          reference: target.reference,
+          note: cleanNote(note),
+          splits: splits,
+        );
     }
   }
 

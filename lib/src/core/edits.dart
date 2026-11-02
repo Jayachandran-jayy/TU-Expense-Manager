@@ -18,6 +18,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'models.dart';
+import 'parser.dart';
 import 'splits.dart';
 
 /// What a queued edit asks for.
@@ -39,7 +40,10 @@ enum EditOp {
 
   /// `deleteTransactions` — a hard delete plus a tombstone, so a later inbox
   /// rescan does not bring the row back.
-  deleteTxn('delete_txn');
+  deleteTxn('delete_txn'),
+
+  /// `updateTransaction` — updates amount, date, merchant, category, and splits.
+  updateTxn('update_txn');
 
   const EditOp(this.wire);
 
@@ -212,6 +216,30 @@ class LedgerEdit {
     }
     return lines;
   }
+
+  /// For [EditOp.updateTxn].
+  double? get amount => switch (payload['amount']) {
+        final num v => v.toDouble(),
+        final String v => double.tryParse(v),
+        _ => null,
+      };
+
+  String? get merchant => payload['merchant'] as String?;
+
+  DateTime? get date => switch (payload['date']) {
+        final int v => DateTime.fromMillisecondsSinceEpoch(v),
+        final num v => DateTime.fromMillisecondsSinceEpoch(v.toInt()),
+        final String v => DateTime.tryParse(v),
+        _ => null,
+      };
+
+  String? get paymentType => payload['payment_type'] as String?;
+
+  TxnDirection? get direction => switch (payload['direction']) {
+        'credit' => TxnDirection.credit,
+        'debit' => TxnDirection.debit,
+        _ => null,
+      };
 
   /// Whether this edit still describes [txn].
   ///
@@ -404,6 +432,11 @@ LedgerEdit composeEdit({
   int? categoryId,
   String? note,
   List<TxnSplit> lines = const <TxnSplit>[],
+  double? amount,
+  String? merchant,
+  DateTime? date,
+  String? paymentType,
+  TxnDirection? direction,
 }) =>
     LedgerEdit(
       editId: editId,
@@ -425,5 +458,22 @@ LedgerEdit composeEdit({
             ],
           },
         EditOp.deleteTxn => const <String, Object?>{},
+        EditOp.updateTxn => <String, Object?>{
+            'amount': amount ?? txn.amount,
+            'merchant': merchant ?? txn.rawMerchant,
+            'date': (date ?? txn.date).millisecondsSinceEpoch,
+            'category_id': categoryId ?? txn.categoryId,
+            'payment_type': paymentType ?? txn.paymentType,
+            'direction': (direction ?? txn.direction).name,
+            'note': note ?? txn.note,
+            if (lines.isNotEmpty)
+              'lines': <Map<String, Object?>>[
+                for (final TxnSplit line in lines)
+                  <String, Object?>{
+                    'category_id': line.categoryId,
+                    'amount': line.amount,
+                  },
+              ],
+          },
       },
     );

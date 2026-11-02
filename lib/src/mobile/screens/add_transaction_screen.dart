@@ -45,6 +45,7 @@ class AddTransactionScreen extends StatefulWidget {
     this.initialDate,
     this.initialNotes,
     this.initialDirection,
+    this.existingTxn,
   });
 
   final List<ExpenseCategory> categories;
@@ -61,6 +62,7 @@ class AddTransactionScreen extends StatefulWidget {
   final DateTime? initialDate;
   final String? initialNotes;
   final TxnDirection? initialDirection;
+  final ExpenseTxn? existingTxn;
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -154,6 +156,37 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
     if (widget.initialNotes != null && widget.initialNotes!.isNotEmpty) {
       _notesController.text = widget.initialNotes!;
+    }
+
+    if (widget.existingTxn case final ExpenseTxn existing) {
+      _direction = existing.direction;
+      _amountController.text = existing.amount.toStringAsFixed(2);
+      _selectedMerchant = existing.merchant;
+      _selectedDate = existing.date;
+      _notesController.text = existing.note;
+      final instrument = existing.paymentType;
+      if (!_addedPaymentTypes.contains(instrument) &&
+          !_basePaymentTypes.contains(instrument) &&
+          !widget.paymentTypes.contains(instrument)) {
+        _addedPaymentTypes.add(instrument);
+      }
+      _paymentType = instrument;
+      _selectedCategory = _allCategories
+              .where((c) => c.id == existing.categoryId)
+              .firstOrNull ??
+          _allCategories.firstOrNull;
+
+      if (existing.isSplit) {
+        _isSplit = true;
+        _splitLines = existing.splits.map((s) {
+          final cat = _allCategories.where((c) => c.id == s.categoryId).firstOrNull ??
+              ExpenseCategory(id: s.categoryId, name: s.categoryName);
+          return _ManualSplitLine(category: cat, amount: s.amount);
+        }).toList();
+        if (_splitLines.length < 2) {
+          _splitLines.add(_ManualSplitLine());
+        }
+      }
     }
 
     // From the unadded-SMS inbox: the message failed a full parse, but the
@@ -440,6 +473,30 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               .toList()
           : const <TxnSplit>[];
 
+      if (widget.existingTxn case final ExpenseTxn existing) {
+        await AppDatabase.instance.updateTransaction(
+          id: existing.id,
+          amount: amount,
+          merchant: _selectedMerchant!,
+          date: _selectedDate,
+          categoryId: _isSplit ? _splitLines.first.category!.id : _selectedCategory!.id,
+          paymentType: _paymentType,
+          direction: _direction,
+          reference: existing.reference,
+          note: _notesController.text.trim(),
+          splits: splits,
+        );
+
+        if (!mounted) return;
+
+        if (!_basePaymentTypes.contains(_paymentType)) {
+          await AppDatabase.instance.addPaymentMethod(_paymentType);
+          if (!mounted) return;
+        }
+        Navigator.pop(context, true);
+        return;
+      }
+
       final int id = await AppDatabase.instance.insertManualTransaction(
         amount: amount,
         merchant: _selectedMerchant!,
@@ -522,7 +579,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Transaction'),
+        title: Text(widget.existingTxn != null ? 'Edit Transaction' : 'Add Transaction'),
         actions: <Widget>[
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -965,7 +1022,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     )
                   : const Icon(Icons.check),
               label: Text(
-                _saving ? 'Saving...' : 'Add Transaction',
+                _saving
+                    ? 'Saving...'
+                    : (widget.existingTxn != null
+                        ? 'Update Transaction'
+                        : 'Add Transaction'),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),

@@ -28,6 +28,7 @@ import '../core/ledger_prefs.dart';
 import '../core/ledger_view.dart';
 import '../core/link_state.dart';
 import '../core/models.dart';
+import '../core/parser.dart';
 import '../core/snapshot_store.dart';
 import '../core/splits.dart';
 import '../ui_shared/connection_dot.dart';
@@ -266,6 +267,27 @@ class _WebShellState extends State<WebShell> {
     if (action == null || !mounted) return;
 
     switch (action) {
+      case WebTxnAction.editTxn:
+        final WebEditTxnResult? res = await editWebTransaction(
+          context,
+          txn: txn,
+          categories: store.categories,
+          money: _money,
+        );
+        if (res == null) return;
+        await _queue(
+          EditOp.updateTxn,
+          txn,
+          amount: res.amount,
+          merchant: res.merchant,
+          date: res.date,
+          categoryId: res.categoryId,
+          paymentType: res.paymentType,
+          direction: res.direction,
+          note: res.note,
+          lines: res.splits,
+        );
+
       case WebTxnAction.setCategory:
         final int? categoryId = await pickWebCategory(
           context,
@@ -314,6 +336,11 @@ class _WebShellState extends State<WebShell> {
     int? categoryId,
     String? note,
     List<TxnSplit> lines = const <TxnSplit>[],
+    double? amount,
+    String? merchant,
+    DateTime? date,
+    String? paymentType,
+    TxnDirection? direction,
   }) async {
     final String? device = _device;
     if (device == null) return;
@@ -327,6 +354,11 @@ class _WebShellState extends State<WebShell> {
       categoryId: categoryId,
       note: note,
       lines: lines,
+      amount: amount,
+      merchant: merchant,
+      date: date,
+      paymentType: paymentType,
+      direction: direction,
     );
 
     final ApiResult<int> result =
