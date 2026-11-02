@@ -534,6 +534,23 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       expect(parsed.hasExplicitTime, isFalse);
     });
 
+    test('parses RBL Bank credit card debit alert (Issue #105)', () {
+      const sms =
+          'INR1,470.08 spent at KPK LAKSHMI AGENCIES on RBL Bank credit card (9019) on 02-11-2026.AVL limit- INR388,529.92. Not you? Call 02262327777';
+      final parsed = SmsParser.parse(sms);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'rbl_card');
+      expect(parsed.amount, 1470.08);
+      expect(parsed.paymentType, 'RBL Bank credit card (9019)');
+      expect(parsed.merchant, 'KPK LAKSHMI AGENCIES');
+      expect(parsed.direction, TxnDirection.debit);
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 11);
+      expect(parsed.date.day, 2);
+      expect(parsed.hasExplicitTime, isFalse);
+    });
+
     test('RagExemplars retrieves newly added exemplars', () {
       const smsHdfc = "Debit Alert! Your HDFC Bank A/c xxxxxx has been debited Rs 1117 on 06th Oct' 2026 via Debit Mandate for RAZORPAY";
       final exHdfc = RagExemplars.findBestExemplars(smsHdfc, limit: 1);
@@ -554,6 +571,11 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       final exNeft = RagExemplars.findBestExemplars(smsNeft, limit: 1);
       expect(exNeft, isNotEmpty);
       expect(exNeft.first.id, 'hdfc_netbanking_debit');
+
+      const smsRbl = 'INR1,470.08 spent at KPK LAKSHMI AGENCIES on RBL Bank credit card (9019) on 02-11-2026.';
+      final exRbl = RagExemplars.findBestExemplars(smsRbl, limit: 1);
+      expect(exRbl, isNotEmpty);
+      expect(exRbl.first.id, 'rbl_bank_card_debit');
     });
   });
 }

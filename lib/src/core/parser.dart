@@ -183,6 +183,18 @@ class SmsParser {
           r'\s+(?:on|at|@|for)\s+(?<merchant>[^.\n]*?)\s*(?:[.\n]|$)'),
     ),
 
+    /// RBL Bank credit card debit (Issue #105):
+    /// `INR1,470.08 spent at KPK LAKSHMI AGENCIES on RBL Bank credit card (9019) on 02-11-2026.AVL limit- INR388,529.92. Not you? Call 02262327777`
+    SmsTemplate(
+      id: 'rbl_card',
+      direction: TxnDirection.debit,
+      pattern: _re('$_cur$_amt\\s+spent\\s+at\\s+'
+          r'(?<merchant>[^\n]+?)\s+on\s+'
+          r'(?<instrument>[^\n]+?)\s+on\s+'
+          '$_date'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:AVL|Avl|Bal|Available|Avail|Not\s+you|Call)|$)'),
+    ),
+
     /// HDFC Bank BillPay debit:
     /// `Bill Paid!\nICICIPruMF Bill XXBROKER-XXXXXX of Rs. 1000.00 paid on 07-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\nBillPay Ref: XXXXXXXXXXXXXX`
     /// `Bill Paid!\nAxisMF Bill XXXXXX-XXXXXX of Rs. 500.00 paid on 05-Oct-2026 from HDFC Bank Account XXXXXXXXXXXXXX.\nBillPay Ref: XXXXXXXXXXXXXX`

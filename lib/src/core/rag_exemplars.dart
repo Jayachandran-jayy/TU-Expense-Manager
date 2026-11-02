@@ -270,6 +270,25 @@ class RagExemplars {
         'date': null,
       },
     ),
+
+    // 14. RBL Bank Credit Card Debit (Issue #105)
+    RagExemplar(
+      id: 'rbl_bank_card_debit',
+      bank: 'RBL Bank credit card',
+      keywords: <String>['rbl', 'bank', 'credit', 'card', 'spent', 'inr'],
+      rawSms:
+          'INR1,470.08 spent at KPK LAKSHMI AGENCIES on RBL Bank credit card (9019) on 02-11-2026.AVL limit- INR388,529.92. Not you? Call 02262327777',
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'debit',
+        'amount': 1470.08,
+        'currency': 'INR',
+        'merchant': 'KPK LAKSHMI AGENCIES',
+        'account': '9019',
+        'reference': null,
+        'date': '2026-11-02',
+      },
+    ),
   ];
 
   /// Finds the top [limit] best matching exemplars for the input [messageText].
