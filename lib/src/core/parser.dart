@@ -199,6 +199,20 @@ class SmsParser {
           r'(?:\s*BillPay\s+Ref\s*:?\s*(?<ref>[\w\-]+))?'),
     ),
 
+    /// HDFC NetBanking / Online Banking debit alert (Issue #100):
+    /// `Amt Deducted! Rs.11500 from your HDFC Bank A/c XX*XXXX for NEFT txn via HDFC Bank Online Banking Not you?Call 18002586161/SMS BLOCK OB to [PHONE]`
+    SmsTemplate(
+      id: 'hdfc_netbanking_deducted',
+      direction: TxnDirection.debit,
+      pattern: _re(r'Amt\s+Deducted!?\s+'
+          '$_cur$_amt'
+          r'\s+(?:from|From)\s+(?:your\s+)?(?<instrument>[^\n]+?)\s+for\s+'
+          r'(?<merchant>[^\n]+?)(?:\s+txn)?\s+via\s+(?:[^\n]+?)'
+          r'(?:(?:\s+on|\s+On)\s+'
+          '$_date)?'
+          r'(?:\s+(?:Not\s+you|Call|\.|$)|$)'),
+    ),
+
     // -- Unverified: written from each issuer's documented wording, not from
     //    a real message. Replace with the genuine body when one turns up.
 
@@ -278,6 +292,19 @@ class SmsParser {
           r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Avail|Not you|Call)|$)'),
     ),
 
+    /// HDFC Cash Deposit Machine credit alert (Issue #99):
+    /// `Deposited! INR 1,000.00 in HDFC Bank A/c XX*XXXX On 29/10/26 16:06:56 At HMT LAYOUT Via Cash Deposit Machine Bal: INR [MASKED]`
+    SmsTemplate(
+      id: 'hdfc_cash_deposit',
+      direction: TxnDirection.credit,
+      pattern: _re(r'Deposited!?\s+'
+          '$_cur$_amt'
+          r'\s+(?:in|into|to)\s+(?<instrument>[^\n]+?)\s+(?:On|on)\s+'
+          '$_date'
+          r'(?:(?:\s+(?:At|at)\s+[^\n]+?)?\s+(?:Via|via)\s+(?<merchant>Cash\s+Deposit\s+Machine|[^\n.]+?)|(?:\s+(?:At|at)\s+(?<merchant>[^\n.]+?)))'
+          r'(?:[.\s]+(?:Bal|Avl|Available|Not you)|$)'),
+    ),
+
     /// `Rs.500.00 credited to HDFC Bank A/c XX0444 from RAPIDO on 11/08/26
     ///  Ref 123456789`
     SmsTemplate(
@@ -343,7 +370,7 @@ class SmsParser {
 
   /// Fallback check for messages that failed strict parsing but still look like transactions.
   static bool looksLikeTransaction(String body) {
-    return RegExp(r'\b(rs\.?|inr|spent|debited|credited|txn|deducted|paid)\b', caseSensitive: false).hasMatch(body);
+    return RegExp(r'\b(rs\.?|inr|spent|debited|credited|txn|deducted|paid|deposited)\b', caseSensitive: false).hasMatch(body);
   }
 
   /// A loose, standalone amount extraction for a message that failed a full
@@ -484,8 +511,15 @@ class SmsParser {
       if (amount == null || amount <= 0) continue;
 
       final defaultYear = receivedAt?.year ?? DateTime.now().year;
-      final stamp = _parseDate(_group(match, 'date') ?? '', defaultYear: defaultYear);
-      if (stamp == null) continue;
+      final dateRaw = _group(match, 'date');
+      final _Stamp? stamp;
+      if (dateRaw != null && dateRaw.trim().isNotEmpty) {
+        stamp = _parseDate(dateRaw, defaultYear: defaultYear);
+        if (stamp == null) continue;
+      } else {
+        final fallback = receivedAt ?? DateTime.now();
+        stamp = _Stamp(fallback, hasTime: false);
+      }
 
       final merchant = cleanMerchantName(_group(match, 'merchant') ?? '');
       if (merchant.isEmpty) continue;

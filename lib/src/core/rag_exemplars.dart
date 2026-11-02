@@ -232,6 +232,44 @@ class RagExemplars {
         'date': '2026-10-21',
       },
     ),
+
+    // 12. HDFC Bank Cash Deposit Machine Credit (Issue #99)
+    RagExemplar(
+      id: 'hdfc_cash_deposit_credit',
+      bank: 'HDFC Bank',
+      keywords: <String>['hdfc', 'bank', 'deposited', 'credit', 'inr', 'cash', 'cdm'],
+      rawSms:
+          'Deposited! INR 1,000.00 in HDFC Bank A/c XX*XXXX On 29/10/26 16:06:56 At HMT LAYOUT Via Cash Deposit Machine Bal: INR [MASKED]',
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'credit',
+        'amount': 1000.0,
+        'currency': 'INR',
+        'merchant': 'Cash Deposit Machine',
+        'account': 'XX*XXXX',
+        'reference': null,
+        'date': '2026-10-29',
+      },
+    ),
+
+    // 13. HDFC Bank NetBanking Debit (Issue #100)
+    RagExemplar(
+      id: 'hdfc_netbanking_debit',
+      bank: 'HDFC Bank',
+      keywords: <String>['hdfc', 'bank', 'deducted', 'debit', 'neft', 'online', 'banking'],
+      rawSms:
+          'Amt Deducted! Rs.11500 from your HDFC Bank A/c XX*XXXX for NEFT txn via HDFC Bank Online Banking Not you?Call 18002586161/SMS BLOCK OB to [PHONE]',
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'debit',
+        'amount': 11500.0,
+        'currency': 'INR',
+        'merchant': 'NEFT',
+        'account': 'XX*XXXX',
+        'reference': '[MASKED]',
+        'date': null,
+      },
+    ),
   ];
 
   /// Finds the top [limit] best matching exemplars for the input [messageText].
