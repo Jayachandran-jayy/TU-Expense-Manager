@@ -75,7 +75,8 @@ class AppDatabase {
         id    INTEGER PRIMARY KEY AUTOINCREMENT,
         name  TEXT NOT NULL UNIQUE COLLATE NOCASE,
         icon  TEXT NOT NULL DEFAULT '',
-        color INTEGER
+        color INTEGER,
+        budget REAL
       )
     ''');
 
@@ -457,6 +458,10 @@ class AppDatabase {
       await batch.commit(noResult: true);
     }
 
+    if (oldVersion < 15) {
+      await db.execute('ALTER TABLE categories ADD COLUMN budget REAL');
+    }
+
     if (oldVersion < 9) {
       // 1. Clean merchant_mappings
       final mappings = await db.query('merchant_mappings');
@@ -663,6 +668,16 @@ class AppDatabase {
       },
       where: 'id = ?',
       whereArgs: <Object?>[id],
+    );
+  }
+
+  Future<void> updateCategoryBudget(int categoryId, double? budget) async {
+    final db = await database;
+    await db.update(
+      'categories',
+      <String, Object?>{'budget': budget},
+      where: 'id = ?',
+      whereArgs: <Object?>[categoryId],
     );
   }
 

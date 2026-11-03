@@ -270,12 +270,15 @@ Uint8List encodeBackupWorkbook(BackupData data) {
 
   sheet(
     kSheetCategories,
-    const <String>['id', 'Name', 'Icon'],
+    const <String>['id', 'Name', 'Icon', 'Budget'],
     () => data.categories
         .map((Map<String, Object?> row) => <CellValue?>[
               IntCellValue((row['id'] as num).toInt()),
               TextCellValue(row['name'] as String),
               _textOrBlank(row['icon']),
+              row['budget'] != null
+                  ? DoubleCellValue((row['budget'] as num).toDouble())
+                  : null,
             ])
         .toList(),
   );
@@ -504,9 +507,15 @@ BackupData decodeBackupWorkbook(List<int> bytes) {
       final int? id = _cellInt(cell('id'));
       final String? name = _cellText(cell('Name'));
       final String? icon = _cellText(cell('Icon'));
+      final double? budget = _cellDouble(cell('Budget'));
       if (id == null) categories.bad(row, 'the id is missing or not a number.');
       if (name == null || name.isEmpty) categories.bad(row, 'the name is empty.');
-      return <String, Object?>{'id': id, 'name': name, 'icon': icon ?? ''};
+      return <String, Object?>{
+        'id': id,
+        'name': name,
+        'icon': icon ?? '',
+        'budget': ?budget,
+      };
     }),
     merchantMappings: mappings.map((CellValue? Function(String) cell, int row) {
       final String? merchant = _cellText(cell('Merchant'));

@@ -158,6 +158,15 @@ Protect sensitive financial records from prying eyes with hardware-backed securi
 - **Instant Backgrounding Lock**: Automatically presents the lock screen immediately whenever the app is minimized or switched to the background.
 - **Recent Apps Privacy (`FLAG_SECURE`)**: Automatically protects the app window from screenshots and masks app previews in the Android app switcher when App Lock is active.
 
+### 12. 🎯 Category Budgets & 3-Month Spend Overview
+Set monthly spending targets, stay aware of limits, and track spending trends over time:
+- **Dedicated Budgets Section**: Accessible via the dedicated "Budgets" tab on mobile and desktop web.
+- **Recurring Monthly Targets**: Set a target once per category (e.g., *Groceries → ₹6,000/month*); recurs automatically across future months until edited.
+- **Dynamic Awareness Badges**: Visual indicators shift from Green (< 80%) to Amber (80% – 100%) and Red (> 100% with warning icon and `-₹X over` alert) as expenses land.
+- **3-Month Spend Trend**: Every category card displays a mini 3-bar spend comparison for Month $N-2$, Month $N-1$, and Month $N$ alongside your monthly budget line and 3-month average spend.
+- **Smart 1-Tap Average Suggestion**: When setting or tuning a budget, the editor automatically computes your past 3-month average spend as a quick 1-tap prefill suggestion.
+- **Instant Transaction Filter**: Jump directly from any budget card to the Transactions list pre-filtered to that specific category and month.
+
 ---
 
 ## 📸 Visual Tour
@@ -555,6 +564,10 @@ Automatically strips bank gateway transport prefixes (`UPI_`, `UPI-`, `UPI/`, `U
 - **Merchant Mappings**: If both `UPI_Merchant` and `Merchant` exist, the non-UPI rule is preserved and the `UPI_` entry is pruned. Orphaned mappings are renamed to the cleaned merchant name.
 - **Transactions & Deleted Tombstones**: Cleans the `merchant` column, deduplicating any natural key collisions created by the rename.
 - **Name Aliases**: Cleans merchant aliases and canonical names, automatically dropping redundant self-aliases.
+
+#### Migration v14 → v15
+
+Adds `categories.budget REAL` for category monthly spending targets. Preserves all existing category configurations and guarantees backward and forward compatibility across JSON snapshot syncing and Excel `.xlsx` backups.
 
 ### Category Emojis & Smart Matching
 

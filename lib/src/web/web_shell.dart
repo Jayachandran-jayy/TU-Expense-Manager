@@ -31,6 +31,7 @@ import '../core/models.dart';
 import '../core/parser.dart';
 import '../core/snapshot_store.dart';
 import '../core/splits.dart';
+import '../ui_shared/budgets_tab.dart';
 import '../ui_shared/connection_dot.dart';
 import '../ui_shared/dashboard_tab.dart';
 import '../ui_shared/formats.dart';
@@ -65,7 +66,7 @@ class WebShell extends StatefulWidget {
   State<WebShell> createState() => _WebShellState();
 }
 
-enum _Tab { dashboard, transactions }
+enum _Tab { dashboard, transactions, budgets }
 
 class _WebShellState extends State<WebShell> {
   final NumberFormat _money = appMoneyFormat();
@@ -85,6 +86,7 @@ class _WebShellState extends State<WebShell> {
   LedgerSort _sort = LedgerSort.newest;
   Set<YearMonth> _dashboardMonths = <YearMonth>{YearMonth.current()};
   YearMonth _currentMonth = YearMonth.current();
+  YearMonth _budgetMonth = YearMonth.current();
 
   /// Edits queued from here that the phone has not applied yet.
   int _pendingEdits = 0;
@@ -481,6 +483,11 @@ class _WebShellState extends State<WebShell> {
             selectedIcon: Icon(Icons.receipt_long),
             label: 'Transactions',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet),
+            label: 'Budgets',
+          ),
         ],
       ),
     );
@@ -547,6 +554,35 @@ class _WebShellState extends State<WebShell> {
           onDelete: _deleteTransaction,
           emptyDetail: 'Transactions are added on your phone, from bank SMS '
               'alerts. This view reads what it last synced.',
+        ),
+        BudgetsTab(
+          transactions: store.transactions,
+          categories: store.categories,
+          targetMonth: _budgetMonth,
+          currentMonth: _currentMonth,
+          money: _money,
+          loading: _loading,
+          onMonthChanged: (YearMonth m) => setState(() => _budgetMonth = m),
+          onRefresh: () => _load(),
+          onSetBudget: (ExpenseCategory cat, double? b) async {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Budgets are managed and edited on your mobile device.',
+                ),
+              ),
+            );
+          },
+          onViewCategoryTransactions: (ExpenseCategory cat, YearMonth month) {
+            setState(() {
+              _filters = LedgerFilters(
+                months: <YearMonth>{month},
+                categoryIds: <int>{cat.id},
+                includeCredits: _filters.includeCredits,
+              );
+              _tab = _Tab.transactions;
+            });
+          },
         ),
       ],
     );

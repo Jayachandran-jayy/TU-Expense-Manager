@@ -669,3 +669,196 @@ String cleanNote(String raw) {
       ? collapsed
       : collapsed.substring(0, kNoteMaxLength).trimRight();
 }
+
+/// The 3-month window ending in [current] (Month N-2, Month N-1, Month N).
+List<YearMonth> budgetLookbackMonths(YearMonth current) => <YearMonth>[
+      current.plus(-2),
+      current.plus(-1),
+      current,
+    ];
+
+/// Budget status and 3-month spend history for a category with an active budget limit.
+class CategoryBudgetSummary {
+  const CategoryBudgetSummary({
+    required this.category,
+    required this.budget,
+    required this.currentSpent,
+    required this.monthSpends,
+    required this.lookbackMonths,
+  });
+
+  final ExpenseCategory category;
+  final double budget;
+  final double currentSpent;
+  final Map<YearMonth, double> monthSpends;
+  final List<YearMonth> lookbackMonths;
+
+  double get remaining => budget - currentSpent;
+  bool get isOverBudget => currentSpent > budget;
+  double get progress =>
+      budget > 0 ? (currentSpent / budget).clamp(0.0, 1.0) : 0.0;
+  double get rawRatio => budget > 0 ? (currentSpent / budget) : 0.0;
+
+  double get averageSpend {
+    if (monthSpends.isEmpty) return 0.0;
+    final double total =
+        monthSpends.values.fold<double>(0.0, (sum, val) => sum + val);
+    return total / monthSpends.length;
+  }
+}
+
+/// Spend history and reference average for a category without a budget.
+class UnbudgetedCategorySummary {
+  const UnbudgetedCategorySummary({
+    required this.category,
+    required this.currentSpent,
+    required this.monthSpends,
+    required this.lookbackMonths,
+  });
+
+  final ExpenseCategory category;
+  final double currentSpent;
+  final Map<YearMonth, double> monthSpends;
+  final List<YearMonth> lookbackMonths;
+
+  double get averageSpend {
+    if (monthSpends.isEmpty) return 0.0;
+    final double total =
+        monthSpends.values.fold<double>(0.0, (sum, val) => sum + val);
+    return total / monthSpends.length;
+  }
+}
+
+/// Overall budget aggregate across all budgeted categories for a given month.
+class OverallBudgetSummary {
+  const OverallBudgetSummary({
+    required this.totalBudget,
+    required this.totalSpent,
+    required this.budgetedCategoryCount,
+    required this.unbudgetedCategoryCount,
+  });
+
+  final double totalBudget;
+  final double totalSpent;
+  final int budgetedCategoryCount;
+  final int unbudgetedCategoryCount;
+
+  double get totalRemaining => totalBudget - totalSpent;
+  bool get isOverBudget => totalSpent > totalBudget;
+  double get progress =>
+      totalBudget > 0 ? (totalSpent / totalBudget).clamp(0.0, 1.0) : 0.0;
+  double get rawRatio => totalBudget > 0 ? (totalSpent / totalBudget) : 0.0;
+}
+
+/// Complete budget overview report for [targetMonth] across 3 lookback months.
+class BudgetReport {
+  const BudgetReport({
+    required this.targetMonth,
+    required this.lookbackMonths,
+    required this.activeBudgets,
+    required this.unbudgeted,
+    required this.overall,
+  });
+
+  final YearMonth targetMonth;
+  final List<YearMonth> lookbackMonths;
+  final List<CategoryBudgetSummary> activeBudgets;
+  final List<UnbudgetedCategorySummary> unbudgeted;
+  final OverallBudgetSummary overall;
+}
+
+/// Computes the [BudgetReport] for [targetMonth] over [categories] and [transactions].
+BudgetReport deriveBudgetReport({
+  required List<ExpenseTxn> transactions,
+  required List<ExpenseCategory> categories,
+  required YearMonth targetMonth,
+}) {
+  final List<YearMonth> lookback = budgetLookbackMonths(targetMonth);
+  final Set<YearMonth> lookbackSet = lookback.toSet();
+  final List<LedgerEntry> entries =
+      applyFilters(transactions, months: lookbackSet, includeCredits: false);
+
+  final Map<YearMonth, Map<int, double>> spendByMonthAndCategory =
+      <YearMonth, Map<int, double>>{
+    for (final YearMonth m in lookback) m: <int, double>{},
+  };
+
+  for (final LedgerEntry entry in entries) {
+    if (entry.txn.isCredit) continue;
+    final YearMonth ym = YearMonth.fromDate(entry.txn.date);
+    if (!lookbackSet.contains(ym)) continue;
+    final Map<int, double> monthMap = spendByMonthAndCategory[ym]!;
+    for (final TxnSplit line in entry.lines) {
+      monthMap[line.categoryId] =
+          (monthMap[line.categoryId] ?? 0.0) + line.amount;
+    }
+  }
+
+  final List<CategoryBudgetSummary> active = <CategoryBudgetSummary>[];
+  final List<UnbudgetedCategorySummary> unbudgeted =
+      <UnbudgetedCategorySummary>[];
+
+  double totalBudget = 0.0;
+  double totalSpentOnBudgeted = 0.0;
+
+  for (final ExpenseCategory category in categories) {
+    final Map<YearMonth, double> monthSpends = <YearMonth, double>{
+      for (final YearMonth m in lookback)
+        m: spendByMonthAndCategory[m]?[category.id] ?? 0.0,
+    };
+    final double currentSpent = monthSpends[targetMonth] ?? 0.0;
+
+    if (category.budget != null && category.budget! > 0) {
+      final double b = category.budget!;
+      totalBudget += b;
+      totalSpentOnBudgeted += currentSpent;
+      active.add(CategoryBudgetSummary(
+        category: category,
+        budget: b,
+        currentSpent: currentSpent,
+        monthSpends: monthSpends,
+        lookbackMonths: lookback,
+      ));
+    } else {
+      unbudgeted.add(UnbudgetedCategorySummary(
+        category: category,
+        currentSpent: currentSpent,
+        monthSpends: monthSpends,
+        lookbackMonths: lookback,
+      ));
+    }
+  }
+
+  // Active budgets: over budget first, then by progress ratio descending
+  active.sort((CategoryBudgetSummary a, CategoryBudgetSummary b) {
+    if (a.isOverBudget != b.isOverBudget) {
+      return a.isOverBudget ? -1 : 1;
+    }
+    return b.rawRatio.compareTo(a.rawRatio);
+  });
+
+  // Unbudgeted: current month spend first, then 3-month average descending
+  unbudgeted.sort((UnbudgetedCategorySummary a, UnbudgetedCategorySummary b) {
+    final bool aHasCurrent = a.currentSpent > 0;
+    final bool bHasCurrent = b.currentSpent > 0;
+    if (aHasCurrent != bHasCurrent) {
+      return aHasCurrent ? -1 : 1;
+    }
+    return b.averageSpend.compareTo(a.averageSpend);
+  });
+
+  final OverallBudgetSummary overall = OverallBudgetSummary(
+    totalBudget: totalBudget,
+    totalSpent: totalSpentOnBudgeted,
+    budgetedCategoryCount: active.length,
+    unbudgetedCategoryCount: unbudgeted.length,
+  );
+
+  return BudgetReport(
+    targetMonth: targetMonth,
+    lookbackMonths: lookback,
+    activeBudgets: active,
+    unbudgeted: unbudgeted,
+    overall: overall,
+  );
+}

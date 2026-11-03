@@ -263,8 +263,8 @@ When filters change:
 
 ## 5. Database Schema Reference
 
-SQLite database runs on version 14 (`kSchemaVersion = 14`):
-- `categories`: Available expense categories (`id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL COLLATE NOCASE, icon TEXT NOT NULL DEFAULT '', color INTEGER`).
+SQLite database runs on version 15 (`kSchemaVersion = 15`):
+- `categories`: Available expense categories (`id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL COLLATE NOCASE, icon TEXT NOT NULL DEFAULT '', color INTEGER, budget REAL`).
 - `merchant_mappings`: Direct `merchant_name` (PK, NOCASE) to `category_id` mapping.
 - `name_aliases`: Merged merchant or payment type labels.
 - `transactions`: Core transaction records.
@@ -277,7 +277,23 @@ SQLite database runs on version 14 (`kSchemaVersion = 14`):
 > - In schema v8, the `icon` column stores custom category emojis. When empty, `categoryEmoji(name)` falls back to seeded emojis and smart keyword matching.
 > - In schema v9, bank gateway transport prefixes (`UPI_`, `UPI-`, `UPI/`, `UPI `) are automatically stripped across `transactions`, `merchant_mappings`, `deleted_transactions`, and `name_aliases` during migration, with automatic collision resolution preserving non-UPI category mappings and deduplicating matching natural keys.
 > - In schema v14, the `payment_methods` table is introduced to persist discovered accounts and cards so they remain selectable across manual entry and filtering without being lost if transactions are modified.
+> - In schema v15, `categories.budget` is introduced to store recurring monthly target limits per category. Nullable/zero represents unbudgeted. Full serialization roundtrip parity is supported across JSON snapshots and Excel `.xlsx` backups without requiring extra joins or altering sync protocols.
 > - For split transactions, `transactions.category_id` is a denormalized cache storing the ID of the split line with the highest amount. This dominant category is used for fallback sorting and display.
+
+---
+
+## 5.1 Category Budgets & 3-Month Spend Overview Subsystem (`BudgetsTab`, `deriveBudgetReport`)
+
+- **4-Tab Shell Architecture**: Mobile `HomeShell` features a dedicated 4th bottom navigation tab (`HomeTab.budgets`), matched on web by `_Tab.budgets` in `WebShell`.
+- **Top Month Navigator**: Allows navigating backward/forward through months (`targetMonth.plus(-1)` / `targetMonth.plus(1)`) or snapping back to current month with `< Month Year >`.
+- **Overall Aggregate Summary**: Derives total budget from the sum of active category budgets, tracking total spend, remaining balances, and progress bars.
+- **Dynamic Status Indication**: Categories dynamically reflect:
+  - **Safe** (< 80%): Accent / credit green with remaining balance badge.
+  - **Warning** (80% – 100%): Amber with remaining balance badge.
+  - **Over Budget** (> 100%): Error red with warning icon and explicit `-₹X over` badge.
+- **3-Month Spend Comparison**: Displays mini 3-bar charts comparing Month $N-2$, Month $N-1$, and Month $N$ relative to category budgets, showing monthly average spend.
+- **Interactive Budget Editor**: Modal bottom sheet provides 3-month average spend as a helpful 1-tap prefill suggestion, direct amount editing, and budget removal.
+- **Transactions Cross-Navigation**: Direct shortcut icon button filters transactions by that category and month in the Transactions tab.
 
 ---
 
