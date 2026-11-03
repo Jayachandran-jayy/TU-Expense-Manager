@@ -10,12 +10,15 @@ import 'parser.dart';
 import 'splits.dart';
 
 
+const Object _sentinel = Object();
+
 class ExpenseCategory {
   const ExpenseCategory({
     required this.id,
     required this.name,
     this.icon = '',
     this.color,
+    this.budget,
   });
 
   factory ExpenseCategory.fromMap(Map<String, Object?> map) => ExpenseCategory(
@@ -23,19 +26,37 @@ class ExpenseCategory {
         name: map['name'] as String,
         icon: (map['icon'] as String?) ?? '',
         color: map['color'] as int?,
+        budget: (map['budget'] as num?)?.toDouble(),
       );
 
   final int id;
   final String name;
   final String icon;
   final int? color;
+  final double? budget;
 
   Map<String, Object?> toMap() => <String, Object?>{
         'id': id,
         'name': name,
         'icon': icon,
         'color': color,
+        'budget': budget,
       };
+
+  ExpenseCategory copyWith({
+    int? id,
+    String? name,
+    String? icon,
+    int? color,
+    Object? budget = _sentinel,
+  }) =>
+      ExpenseCategory(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        icon: icon ?? this.icon,
+        color: color ?? this.color,
+        budget: identical(budget, _sentinel) ? this.budget : (budget as double?),
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -45,10 +66,11 @@ class ExpenseCategory {
           id == other.id &&
           name == other.name &&
           icon == other.icon &&
-          color == other.color;
+          color == other.color &&
+          budget == other.budget;
 
   @override
-  int get hashCode => Object.hash(id, name, icon, color);
+  int get hashCode => Object.hash(id, name, icon, color, budget);
 }
 
 /// A category together with everything filed under it — what the cleanup screen

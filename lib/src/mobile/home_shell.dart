@@ -22,6 +22,7 @@ import '../core/link_state.dart';
 import '../core/models.dart';
 import '../core/parser.dart';
 import '../core/statement_parser.dart';
+import '../ui_shared/budgets_tab.dart';
 import '../ui_shared/connection_dot.dart';
 import '../ui_shared/dashboard_tab.dart';
 import '../ui_shared/formats.dart';
@@ -116,6 +117,7 @@ class _ScanResult {
 enum HomeTab {
   dashboard('Dashboard', Icons.pie_chart_outline, Icons.pie_chart),
   transactions('Transactions', Icons.receipt_long_outlined, Icons.receipt_long),
+  budgets('Budgets', Icons.account_balance_wallet_outlined, Icons.account_balance_wallet),
   settings('Settings', Icons.settings_outlined, Icons.settings);
 
   const HomeTab(this.label, this.icon, this.selectedIcon);
@@ -202,6 +204,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   /// live in an `IndexedStack` and stay alive, neither would be noticed until
   /// the user switched back.
   late Set<YearMonth> _dashboardMonths;
+  late YearMonth _budgetMonth;
 
   /// Ids marked for deletion. Lives here rather than in the tab because the app
   /// bar it takes over is built here.
@@ -216,9 +219,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     // `NavigationBar` is generated from the enum, so a destination added
     // without a child would silently show the wrong screen. Fail loudly here
     // instead.
-    assert(HomeTab.values.length == 3, 'HomeTab and IndexedStack are out of step');
+    assert(HomeTab.values.length == 4, 'HomeTab and IndexedStack are out of step');
     // One reading of the clock for all three, so they cannot disagree.
     _currentMonth = YearMonth.current();
+    _budgetMonth = _currentMonth;
     _filters = LedgerFilters.defaults(_currentMonth);
     _dashboardMonths = <YearMonth>{_currentMonth};
     _load();
@@ -1423,6 +1427,23 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _setCategoryBudget(
+      ExpenseCategory category, double? budget) async {
+    await _db.updateCategoryBudget(category.id, budget);
+    await _load();
+  }
+
+  void _viewCategoryTransactions(ExpenseCategory category, YearMonth month) {
+    setState(() {
+      _filters = LedgerFilters(
+        months: <YearMonth>{month},
+        categoryIds: <int>{category.id},
+        includeCredits: _filters.includeCredits,
+      );
+      _tab = HomeTab.transactions;
+    });
+  }
+
   Future<void> _openAddTransaction() async {
     final view = _derive();
     final customTypes = await AppDatabase.instance.paymentMethods();
@@ -1734,6 +1755,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 // The scan and Deleted actions live here and only here. Two
                 // entry points to a mutating action on two screens is a footgun.
                 HomeTab.transactions => _normalAppBar(),
+                HomeTab.budgets => AppBar(
+                    title: const Text('Budgets'),
+                    actions: <Widget>[_connectionDot()],
+                  ),
                 HomeTab.settings => AppBar(
                     title: const Text('Settings'),
                     actions: <Widget>[_connectionDot()],
@@ -1789,6 +1814,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               onToggleSelected: _toggleSelected,
               onDelete: (ExpenseTxn txn) => _delete(<ExpenseTxn>[txn]),
               onAddTransaction: _openAddTransaction,
+            ),
+            BudgetsTab(
+              transactions: _transactions,
+              categories: _categories,
+              targetMonth: _budgetMonth,
+              currentMonth: _currentMonth,
+              money: _money,
+              loading: _loading,
+              onMonthChanged: (YearMonth m) => setState(() => _budgetMonth = m),
+              onRefresh: _load,
+              onSetBudget: _setCategoryBudget,
+              onViewCategoryTransactions: _viewCategoryTransactions,
             ),
             // Not const any more, and it needs the callback: a sync applies
             // edits made in a browser, so Settings can now change the ledger.
