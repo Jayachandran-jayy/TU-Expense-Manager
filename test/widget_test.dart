@@ -124,6 +124,7 @@ void main() {
       expect(cleanMerchantName('upi_chai point'), 'chai point');
       expect(cleanMerchantName('SWIGGY'), 'SWIGGY');
       expect(cleanMerchantName('  UPI_  Tea Stall   '), 'Tea Stall');
+      expect(cleanMerchantName('+RAMAPURAM'), 'RAMAPURAM');
       expect(cleanMerchantName('UPI'), 'UPI');
     });
 

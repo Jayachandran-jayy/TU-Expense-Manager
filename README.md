@@ -61,7 +61,7 @@ Real-world spending rarely fits into a single bucket. When a single ₹3,450 pay
 - **Accurate Charting**: Filtered views and monthly reports count only the exact split lines corresponding to each category.
 
 ### 3. ⚡ Automated Bank SMS Ingestion & Manual Cash Entry
-- **Automatic Intake**: Reads transactional SMS from major Indian banks and UPI gateways in real time without waking up unnecessary background services. Supported formats include Indian Bank, HDFC (multiline, card, BillPay, debit mandates, NetBanking online transfers, & Cash Deposit Machine alerts), RBL Bank (credit card), YES Bank, SBI, ICICI, Axis Bank (single-line & multi-line UPI), Kotak Mahindra, Canara Bank, Bank of Baroda, IDFC FIRST Bank, Federal Bank, Punjab National Bank (PNB), Union Bank of India, and RuPay card UPI.
+- **Automatic Intake**: Reads transactional SMS from major Indian banks and UPI gateways in real time without waking up unnecessary background services. Supported formats include Indian Bank, HDFC (multiline, card, ATM cash withdrawals, BillPay, debit mandates, NetBanking online transfers, & Cash Deposit Machine alerts), RBL Bank (credit card), YES Bank, SBI, ICICI, Axis Bank (single-line & multi-line UPI), Kotak Mahindra, Canara Bank, Bank of Baroda, IDFC FIRST Bank, Federal Bank, Punjab National Bank (PNB), Union Bank of India, and RuPay card UPI.
 - **Inverted Date & Extended Ref Support**: Intelligently parses SMS structures where transaction dates precede merchants (e.g. `Sent Rs.90.00 from A/c *4668 on 12-10-26 to M/S.RAJALAKSHMI EDUCATION SERV...`) and captures `RRN`, `UTR`, or `Ref no` reference codes.
 - **Track Received Amounts Toggle (Off by Default)**: Control whether incoming credits and refunds appear in your transaction stream and monthly summaries. When disabled, your ledger focuses exclusively on actual spending; enable it anytime in Settings to track received income with green `+₹` badges and net cash flow stats.
 - **Full Transaction Editing**: Need to fix an amount, change a date/time, correct a merchant, or adjust a category? Tap any transaction and select **Edit transaction** to modify its price, date, time, merchant, category/splits, payment method, direction, or note on mobile or via the web dashboard.
@@ -345,6 +345,7 @@ actually carries.
 | HDFC NetBanking online transfer alert | `Amt Deducted! Rs.11500 from your HDFC Bank A/c XX*XXXX for NEFT txn via HDFC Bank Online Banking Not you?Call 18002586161/SMS BLOCK OB to [PHONE]` | debit |
 | HDFC Cash Deposit Machine (CDM) alert | `Deposited! INR 1,000.00 in HDFC Bank A/c XX*XXXX On 29/10/26 16:06:56 At HMT LAYOUT Via Cash Deposit Machine Bal: INR [MASKED]` | credit |
 | RBL Bank credit card alert | `INR1,470.08 spent at KPK LAKSHMI AGENCIES on RBL Bank credit card (9019) on 02-11-2026.AVL limit- ...` | debit |
+| HDFC Bank Card ATM cash withdrawal | `Withdrawn Rs.5000 From HDFC Bank Card x*XXXX At +RAMAPURAM On 2026-11-02:20:12:20 Bal Rs.[MASKED]...` | debit |
 
 **Unconfirmed** — written from wording that is common across issuers, *not* from a real
 message. Replace them with the genuine body when one turns up:
