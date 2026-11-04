@@ -192,7 +192,7 @@ DiagnosticResult diagnoseSms(String body) {
   // 3. Deep failure diagnosis
   final double? amount = SmsParser.extractAmountOnly(body);
 
-  final bool hasDebit = RegExp(r'\b(debited|spent|paid|transferred|deducted|sent|bill paid)\b', caseSensitive: false).hasMatch(body);
+  final bool hasDebit = RegExp(r'\b(debited|spent|paid|transferred|deducted|sent|bill paid|withdrawn)\b', caseSensitive: false).hasMatch(body);
   final bool hasCredit = RegExp(r'\b(credited|received|deposited|refunded)\b', caseSensitive: false).hasMatch(body);
 
   // Check date patterns

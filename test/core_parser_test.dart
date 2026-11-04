@@ -551,6 +551,26 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       expect(parsed.hasExplicitTime, isFalse);
     });
 
+    test('parses HDFC Bank ATM card withdrawal debit alert (Issue #107)', () {
+      const sms =
+          'Withdrawn Rs.5000 From HDFC Bank Card x*XXXX At +RAMAPURAM On 2026-11-02:20:12:20 Bal Rs.[MASKED] Not You? Call 18002586161/SMS BLOCK DC  2227 to [PHONE]';
+      final parsed = SmsParser.parse(sms);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'hdfc_card');
+      expect(parsed.amount, 5000.0);
+      expect(parsed.paymentType, 'HDFC Bank Card x*XXXX');
+      expect(parsed.merchant, 'RAMAPURAM');
+      expect(parsed.direction, TxnDirection.debit);
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 11);
+      expect(parsed.date.day, 2);
+      expect(parsed.date.hour, 20);
+      expect(parsed.date.minute, 12);
+      expect(parsed.date.second, 20);
+      expect(parsed.hasExplicitTime, isTrue);
+    });
+
     test('RagExemplars retrieves newly added exemplars', () {
       const smsHdfc = "Debit Alert! Your HDFC Bank A/c xxxxxx has been debited Rs 1117 on 06th Oct' 2026 via Debit Mandate for RAZORPAY";
       final exHdfc = RagExemplars.findBestExemplars(smsHdfc, limit: 1);
@@ -576,6 +596,11 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       final exRbl = RagExemplars.findBestExemplars(smsRbl, limit: 1);
       expect(exRbl, isNotEmpty);
       expect(exRbl.first.id, 'rbl_bank_card_debit');
+
+      const smsAtm = 'Withdrawn Rs.5000 From HDFC Bank Card x*XXXX At +RAMAPURAM On 2026-11-02:20:12:20';
+      final exAtm = RagExemplars.findBestExemplars(smsAtm, limit: 1);
+      expect(exAtm, isNotEmpty);
+      expect(exAtm.first.id, 'hdfc_bank_card_atm_withdrawal');
     });
   });
 }

@@ -138,10 +138,12 @@ class SmsParser {
     ///  On 2026-08-13:07:19:26.Not You?`
     /// `Spent Rs.39791.72 From HDFC Bank Card x2227 At PZCREDIT9772829
     ///  On 2026-08-11:06:08:24 Bal Rs.210943.42`
+    /// `Withdrawn Rs.5000 From HDFC Bank Card x*XXXX At +RAMAPURAM
+    ///  On 2026-11-02:20:12:20 Bal Rs.[MASKED]`
     SmsTemplate(
       id: 'hdfc_card',
       direction: TxnDirection.debit,
-      pattern: _re('Spent\\s+$_cur$_amt\\s+(?:On|From)\\s+'
+      pattern: _re('(?:Spent|Withdrawn)\\s+$_cur$_amt\\s+(?:On|From)\\s+'
           r'(?<instrument>[^\n]*?)\s+(?:At|@|to)\s*(?<merchant>[^\n]*?)\s+'
           r'(?:On\s+)?'
           '$_date'),
@@ -382,7 +384,7 @@ class SmsParser {
 
   /// Fallback check for messages that failed strict parsing but still look like transactions.
   static bool looksLikeTransaction(String body) {
-    return RegExp(r'\b(rs\.?|inr|spent|debited|credited|txn|deducted|paid|deposited)\b', caseSensitive: false).hasMatch(body);
+    return RegExp(r'\b(rs\.?|inr|spent|debited|credited|txn|deducted|paid|deposited|withdrawn)\b', caseSensitive: false).hasMatch(body);
   }
 
   /// A loose, standalone amount extraction for a message that failed a full
@@ -495,7 +497,7 @@ class SmsParser {
     }
 
     final match = RegExp(
-      r'(?:at|to|@|towards|vpa)\s+([A-Za-z0-9\s._&/-]+?)(?:\s+(?:on|by|via|Ref|UTR|Avl|Bal)|\.|$)',
+      r'(?:at|to|@|towards|vpa)\s+([A-Za-z0-9\s._&/+-]+?)(?:\s+(?:on|by|via|Ref|UTR|Avl|Bal)|\.|$)',
       caseSensitive: false,
     ).firstMatch(body);
     if (match != null) {
@@ -781,6 +783,7 @@ String cleanMerchantName(String value) {
     trimmed = trimmed.replaceFirst(prefixRe, '').trim();
   }
   trimmed = trimmed.replaceFirst(RegExp(r'^m/s\.?\s*', caseSensitive: false), '');
+  trimmed = trimmed.replaceFirst(RegExp(r'^\+\s*'), '');
   var cleaned = trimmed.replaceFirst(RegExp(r'[@.]+$'), '').trim();
   cleaned = cleaned.replaceFirst(
     RegExp(r'-[a-zA-Z0-9.]+@[a-zA-Z0-9]+$', caseSensitive: false),

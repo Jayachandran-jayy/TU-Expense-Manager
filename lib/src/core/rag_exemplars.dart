@@ -289,6 +289,25 @@ class RagExemplars {
         'date': '2026-11-02',
       },
     ),
+
+    // 15. HDFC Bank ATM Card Withdrawal (Issue #107)
+    RagExemplar(
+      id: 'hdfc_bank_card_atm_withdrawal',
+      bank: 'HDFC Bank',
+      keywords: <String>['hdfc', 'bank', 'card', 'withdrawn', 'rs', 'atm'],
+      rawSms:
+          'Withdrawn Rs.5000 From HDFC Bank Card x*XXXX At +RAMAPURAM On 2026-11-02:20:12:20 Bal Rs.[MASKED] Not You? Call 18002586161/SMS BLOCK DC  2227 to [PHONE]',
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'debit',
+        'amount': 5000.0,
+        'currency': 'INR',
+        'merchant': 'RAMAPURAM',
+        'account': 'x*XXXX',
+        'reference': null,
+        'date': '2026-11-02',
+      },
+    ),
   ];
 
   /// Finds the top [limit] best matching exemplars for the input [messageText].
