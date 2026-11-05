@@ -175,5 +175,57 @@ void main() {
       );
       expect(caught, isNotNull);
     });
+
+    testWidgets('UndoToast in Scaffold body does not block bottomNavigationBar taps',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      int selectedIndex = 0;
+      final controller = UndoToastController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              return Scaffold(
+                body: UndoToast(
+                  controller: controller,
+                  child: Center(
+                    child: ElevatedButton(
+                      onPressed: () => controller.show(
+                        message: 'Item deleted',
+                        onUndo: () async {},
+                      ),
+                      child: const Text('Trigger Toast'),
+                    ),
+                  ),
+                ),
+                bottomNavigationBar: NavigationBar(
+                  selectedIndex: selectedIndex,
+                  onDestinationSelected: (i) => setState(() => selectedIndex = i),
+                  destinations: const [
+                    NavigationDestination(icon: Icon(Icons.home), label: 'Dashboard'),
+                    NavigationDestination(icon: Icon(Icons.receipt), label: 'Transactions'),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      // Trigger the toast
+      await tester.tap(find.text('Trigger Toast'));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('Item deleted'), findsOneWidget);
+
+      // Tap the Transactions destination on bottom navigation bar
+      await tester.tap(find.text('Transactions'));
+      await tester.pump();
+
+      expect(selectedIndex, 1);
+    });
   });
 }

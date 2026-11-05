@@ -121,7 +121,8 @@ class SmsSource {
           if (since != null) 'since': since.millisecondsSinceEpoch,
         },
       );
-      if (rawMessages is List && rawMessages.isNotEmpty) {
+      if (rawMessages is List) {
+        if (rawMessages.isEmpty) return const <InboxSms>[];
         return rawMessages
             .whereType<Map>()
             .map((Map m) {
