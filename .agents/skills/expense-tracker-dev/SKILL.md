@@ -95,7 +95,7 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
 - **Idempotency & Multi-Layer Deduplication**:
   - **SmsSource In-Memory Deduplication**: Tracks recent incoming SMS signatures in a bounded 60-second window to drop duplicate native broadcast events from multi-part SMS or carrier re-deliveries, and prevents duplicate telephony listener registrations.
   - **Sequential Ingestion Queue (`HomeShell._serializeSms`)**: Asynchronous serialization queue guarantees that live incoming SMS processing and batch inbox catch-up scans never execute concurrently or race.
-  - **Asynchronous Background Ingestion (`MainActivity.kt`)**: Native Android SMS and MMS/RCS queries run on a dedicated background worker executor (`Executors.newSingleThreadExecutor()`) with batch text part loading (`content://mms/part`), completely decoupling heavy inbox scans from the Android UI thread and Flutter rasterizer to prevent any UI freezing during rescans.
+  - **Asynchronous Background Ingestion (`MainActivity.kt`)**: Native Android SMS and MMS/RCS queries run on a dedicated background worker executor (`Executors.newSingleThreadExecutor()`). MMS/RCS ingestion queries `content://mms` with the date watermark first and selectively batches parts only for matched MMS IDs (`mid IN (...)`), completely avoiding full device-wide part scans and Binder IPC bottlenecks.
   - **Database-Level Composite Deduplication (`AppDatabase.insertParsed`)**:
     - **Exact Natural Key**: `(amount, merchant, date, direction, reference)`.
     - **Reference Code Uniqueness**: Non-empty reference codes (UPI Ref, UTR, Refno) deduplicate across identical `amount + direction + reference`.
