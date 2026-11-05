@@ -236,44 +236,8 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         try {
-            // 1. Fetch text parts efficiently in batch
-            val textByMmsId = mutableMapOf<Long, String>()
-            val partUri = Uri.parse("content://mms/part")
-            val partProjection = arrayOf("_id", "mid", "ct", "text")
-            val partSelection = "ct = ?"
-            val partSelectionArgs = arrayOf("text/plain")
-
-            try {
-                contentResolver.query(partUri, partProjection, partSelection, partSelectionArgs, null)?.use { partCursor ->
-                    val midIndex = partCursor.getColumnIndex("mid")
-                    val textIndex = partCursor.getColumnIndex("text")
-                    val idIndex = partCursor.getColumnIndex("_id")
-
-                    while (partCursor.moveToNext()) {
-                        val mid = if (midIndex >= 0) partCursor.getLong(midIndex) else continue
-                        val text = if (textIndex >= 0) partCursor.getString(textIndex) else null
-                        if (!text.isNullOrBlank()) {
-                            textByMmsId[mid] = text
-                        } else {
-                            val partId = if (idIndex >= 0) partCursor.getLong(idIndex) else -1L
-                            if (partId >= 0 && !textByMmsId.containsKey(mid)) {
-                                try {
-                                    contentResolver.openInputStream(Uri.parse("content://mms/part/$partId"))?.use { stream ->
-                                        val streamText = String(stream.readBytes(), Charsets.UTF_8)
-                                        if (streamText.isNotBlank()) {
-                                            textByMmsId[mid] = streamText
-                                        }
-                                    }
-                                } catch (_: Exception) {}
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(tag, "batch mms part query failed: ${e.message}")
-            }
-
-            // 2. Match text parts with MMS dates
+            // 1. Fetch matching MMS messages and dates first
+            val mmsDates = mutableMapOf<Long, Long>()
             contentResolver.query(mmsUri, projection, selection, selectionArgs, "date ASC")?.use { cursor ->
                 val idIndex = cursor.getColumnIndex("_id")
                 val dateIndex = cursor.getColumnIndex("date")
@@ -281,12 +245,61 @@ class MainActivity : FlutterFragmentActivity() {
                 while (cursor.moveToNext()) {
                     val mmsId = if (idIndex >= 0) cursor.getLong(idIndex) else continue
                     val dateSeconds = if (dateIndex >= 0) cursor.getLong(dateIndex) else continue
-                    val dateMillis = dateSeconds * 1000L
+                    mmsDates[mmsId] = dateSeconds * 1000L
+                }
+            }
 
-                    val body = textByMmsId[mmsId]
-                    if (!body.isNullOrBlank()) {
-                        results.add(mapOf("body" to body, "date" to dateMillis))
+            if (mmsDates.isEmpty()) {
+                return results
+            }
+
+            // 2. Fetch text parts efficiently for matching MMS IDs only
+            val textByMmsId = mutableMapOf<Long, String>()
+            val partUri = Uri.parse("content://mms/part")
+            val partProjection = arrayOf("_id", "mid", "ct", "text")
+            val targetMids = mmsDates.keys.toList()
+
+            for (chunk in targetMids.chunked(500)) {
+                val midPlaceholders = chunk.joinToString(",") { "?" }
+                val partSelection = "ct = ? AND mid IN ($midPlaceholders)"
+                val partSelectionArgs = arrayOf("text/plain", *chunk.map { it.toString() }.toTypedArray())
+
+                try {
+                    contentResolver.query(partUri, partProjection, partSelection, partSelectionArgs, null)?.use { partCursor ->
+                        val midIndex = partCursor.getColumnIndex("mid")
+                        val textIndex = partCursor.getColumnIndex("text")
+                        val idIndex = partCursor.getColumnIndex("_id")
+
+                        while (partCursor.moveToNext()) {
+                            val mid = if (midIndex >= 0) partCursor.getLong(midIndex) else continue
+                            val text = if (textIndex >= 0) partCursor.getString(textIndex) else null
+                            if (!text.isNullOrBlank()) {
+                                textByMmsId[mid] = text
+                            } else {
+                                val partId = if (idIndex >= 0) partCursor.getLong(idIndex) else -1L
+                                if (partId >= 0 && !textByMmsId.containsKey(mid)) {
+                                    try {
+                                        contentResolver.openInputStream(Uri.parse("content://mms/part/$partId"))?.use { stream ->
+                                            val streamText = String(stream.readBytes(), Charsets.UTF_8)
+                                            if (streamText.isNotBlank()) {
+                                                textByMmsId[mid] = streamText
+                                            }
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        }
                     }
+                } catch (e: Exception) {
+                    Log.e(tag, "batch mms part query failed: ${e.message}")
+                }
+            }
+
+            // 3. Assemble results in date order
+            for ((mmsId, dateMillis) in mmsDates) {
+                val body = textByMmsId[mmsId]
+                if (!body.isNullOrBlank()) {
+                    results.add(mapOf("body" to body, "date" to dateMillis))
                 }
             }
         } catch (e: Exception) {

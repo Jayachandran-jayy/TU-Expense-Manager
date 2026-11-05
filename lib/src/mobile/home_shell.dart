@@ -1741,9 +1741,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (!didPop) _clearSelection();
       },
-      child: UndoToast(
-        controller: _undoToastController,
-        child: Scaffold(
+      child: Scaffold(
         // Selection only ever happens on the ledger, so it outranks the tab.
         appBar: selecting
             ? _selectionAppBar(view.visible)
@@ -1770,69 +1768,72 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         // These children MUST stay in `HomeTab.values` order — position is the
         // index, and nothing in the type system says so. The assert in
         // `initState` catches a destination added without a child.
-        body: IndexedStack(
-          index: _tab.index,
-          children: <Widget>[
-            DashboardTab(
-              transactions: _transactions,
-              months: _dashboardMonths,
-              includeCredits: _filters.includeCredits,
-              monthChoices: monthOptions(
-                _transactions,
-                current: _currentMonth,
-                keep: _dashboardMonths,
+        body: UndoToast(
+          controller: _undoToastController,
+          child: IndexedStack(
+            index: _tab.index,
+            children: <Widget>[
+              DashboardTab(
+                transactions: _transactions,
+                months: _dashboardMonths,
                 includeCredits: _filters.includeCredits,
+                monthChoices: monthOptions(
+                  _transactions,
+                  current: _currentMonth,
+                  keep: _dashboardMonths,
+                  includeCredits: _filters.includeCredits,
+                ),
+                currentMonth: _currentMonth,
+                money: _money,
+                loading: _loading,
+                onMonthsChanged: (Set<YearMonth> m) =>
+                    setState(() => _dashboardMonths = m),
+                onRefresh: _load,
               ),
-              currentMonth: _currentMonth,
-              money: _money,
-              loading: _loading,
-              onMonthsChanged: (Set<YearMonth> m) =>
-                  setState(() => _dashboardMonths = m),
-              onRefresh: _load,
-            ),
-            TransactionsTab(
-              entries: view.visible,
-              filters: view.filters,
-              sort: _sort,
-              monthChoices: view.months,
-              currentMonth: _currentMonth,
-              categoryChoices: view.categories,
-              merchantChoices: view.merchants,
-              paymentTypeChoices: view.paymentTypes,
-              money: _money,
-              dateFormat: _dateFormat,
-              loading: _loading,
-              // The list can be empty because the ledger is, or because the
-              // filters excluded everything — two different things to say.
-              ledgerIsEmpty: _transactions.isEmpty,
-              selected: _selected,
-              onFiltersChanged: (LedgerFilters f) =>
-                  setState(() => _filters = f),
-              onSortChanged: (LedgerSort s) => setState(() => _sort = s),
-              onRefresh: _load,
-              onTap: _openTransaction,
-              onToggleSelected: _toggleSelected,
-              onDelete: (ExpenseTxn txn) => _delete(<ExpenseTxn>[txn]),
-              onAddTransaction: _openAddTransaction,
-            ),
-            BudgetsTab(
-              transactions: _transactions,
-              categories: _categories,
-              targetMonth: _budgetMonth,
-              currentMonth: _currentMonth,
-              money: _money,
-              loading: _loading,
-              onMonthChanged: (YearMonth m) => setState(() => _budgetMonth = m),
-              onRefresh: _load,
-              onSetBudget: _setCategoryBudget,
-              onViewCategoryTransactions: _viewCategoryTransactions,
-            ),
-            // Not const any more, and it needs the callback: a sync applies
-            // edits made in a browser, so Settings can now change the ledger.
-            // IndexedStack keeps this alive, so relying on the leaving-Settings
-            // reload alone would leave stale rows on screen until then.
-            SettingsScreen(onChanged: _load),
-          ],
+              TransactionsTab(
+                entries: view.visible,
+                filters: view.filters,
+                sort: _sort,
+                monthChoices: view.months,
+                currentMonth: _currentMonth,
+                categoryChoices: view.categories,
+                merchantChoices: view.merchants,
+                paymentTypeChoices: view.paymentTypes,
+                money: _money,
+                dateFormat: _dateFormat,
+                loading: _loading,
+                // The list can be empty because the ledger is, or because the
+                // filters excluded everything — two different things to say.
+                ledgerIsEmpty: _transactions.isEmpty,
+                selected: _selected,
+                onFiltersChanged: (LedgerFilters f) =>
+                    setState(() => _filters = f),
+                onSortChanged: (LedgerSort s) => setState(() => _sort = s),
+                onRefresh: _load,
+                onTap: _openTransaction,
+                onToggleSelected: _toggleSelected,
+                onDelete: (ExpenseTxn txn) => _delete(<ExpenseTxn>[txn]),
+                onAddTransaction: _openAddTransaction,
+              ),
+              BudgetsTab(
+                transactions: _transactions,
+                categories: _categories,
+                targetMonth: _budgetMonth,
+                currentMonth: _currentMonth,
+                money: _money,
+                loading: _loading,
+                onMonthChanged: (YearMonth m) => setState(() => _budgetMonth = m),
+                onRefresh: _load,
+                onSetBudget: _setCategoryBudget,
+                onViewCategoryTransactions: _viewCategoryTransactions,
+              ),
+              // Not const any more, and it needs the callback: a sync applies
+              // edits made in a browser, so Settings can now change the ledger.
+              // IndexedStack keeps this alive, so relying on the leaving-Settings
+              // reload alone would leave stale rows on screen until then.
+              SettingsScreen(onChanged: _load),
+            ],
+          ),
         ),
         floatingActionButton: onLedger && !selecting
             ? FloatingActionButton.extended(
@@ -1854,7 +1855,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           ],
         ),
       ),
-    ),   // UndoToast
     );
   }
 }
