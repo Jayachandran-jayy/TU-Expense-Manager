@@ -6,6 +6,29 @@ library;
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
+/// Holds sanitized system diagnostics for bug reporting.
+class DeviceDiagnostics {
+  final String appVersion;
+  final String appBuild;
+  final String deviceModel;
+  final String osVersion;
+  final int? sdkInt;
+
+  const DeviceDiagnostics({
+    required this.appVersion,
+    required this.appBuild,
+    required this.deviceModel,
+    required this.osVersion,
+    this.sdkInt,
+  });
+
+  String get summary {
+    final os = sdkInt != null ? 'Android $osVersion (API $sdkInt)' : osVersion;
+    return '$deviceModel • $os • v$appVersion${appBuild.isNotEmpty ? '+$appBuild' : ''}';
+  }
+}
 
 class GitHubContributionHelper {
   GitHubContributionHelper._();
@@ -175,6 +198,136 @@ $excerpt
       account: account,
       reference: reference,
       date: date,
+    );
+
+    return await openUrl(uri.toString());
+  }
+
+  /// Fetches system and device diagnostics for bug reporting.
+  static Future<DeviceDiagnostics> fetchDeviceDiagnostics({
+    String? appVersion,
+    String? appBuild,
+  }) async {
+    String version = appVersion ?? 'Unknown';
+    String build = appBuild ?? '';
+    if (appVersion == null) {
+      try {
+        final info = await PackageInfo.fromPlatform();
+        version = info.version;
+        build = info.buildNumber;
+      } catch (_) {}
+    }
+
+    String model = Platform.operatingSystem;
+    String os = Platform.operatingSystemVersion;
+    int? sdk;
+
+    if (Platform.isAndroid) {
+      try {
+        final Map<dynamic, dynamic>? res = await _telephonyChannel
+            .invokeMethod<Map<dynamic, dynamic>>('getDeviceInfo');
+        if (res != null) {
+          final mfg = res['manufacturer']?.toString() ?? '';
+          final mdl = res['model']?.toString() ?? '';
+          model = mfg.isNotEmpty ? '$mfg $mdl'.trim() : mdl;
+          os = res['androidVersion']?.toString() ?? os;
+          sdk = res['sdkInt'] as int?;
+        }
+      } catch (_) {}
+    }
+
+    return DeviceDiagnostics(
+      appVersion: version,
+      appBuild: build,
+      deviceModel: model.isNotEmpty ? model : 'Unknown Device',
+      osVersion: os,
+      sdkInt: sdk,
+    );
+  }
+
+  /// Generates the Markdown body for a GitHub bug report issue.
+  static String generateBugReportBody({
+    String? title,
+    required String description,
+    String? stepsToReproduce,
+    required DeviceDiagnostics diagnostics,
+  }) {
+    final buffer = StringBuffer();
+    if (title != null && title.trim().isNotEmpty) {
+      final cleanTitle = title.trim();
+      final headerTitle = cleanTitle.toLowerCase().startsWith('[bug')
+          ? cleanTitle
+          : cleanTitle;
+      buffer.writeln('### 🐛 Bug Report: $headerTitle\n');
+    } else {
+      buffer.writeln('### 🐛 Bug Report\n');
+    }
+    buffer.writeln('#### Description');
+    buffer.writeln(description.trim());
+    buffer.writeln();
+
+    if (stepsToReproduce != null && stepsToReproduce.trim().isNotEmpty) {
+      buffer.writeln('#### Steps to Reproduce');
+      buffer.writeln(stepsToReproduce.trim());
+      buffer.writeln();
+    }
+
+    buffer.writeln('#### System Diagnostics');
+    buffer.writeln('- **App Version**: ${diagnostics.appVersion}${diagnostics.appBuild.isNotEmpty ? ' (build ${diagnostics.appBuild})' : ''}');
+    buffer.writeln('- **Device**: ${diagnostics.deviceModel}');
+    final osText = diagnostics.sdkInt != null
+        ? 'Android ${diagnostics.osVersion} (API ${diagnostics.sdkInt})'
+        : diagnostics.osVersion;
+    buffer.writeln('- **OS**: $osText');
+    buffer.writeln();
+    buffer.writeln('---');
+    buffer.writeln('*Reported voluntarily via TU Expense Tracker.*');
+
+    return buffer.toString();
+  }
+
+  /// Builds the pre-filled GitHub Issue URI for a bug report.
+  static Uri buildBugReportUri({
+    required String title,
+    required String body,
+  }) {
+    final cleanTitle = title.trim();
+    final String issueTitle = cleanTitle.toLowerCase().startsWith('[bug')
+        ? cleanTitle
+        : '[Bug Report]: $cleanTitle';
+
+    return Uri.https(
+      'github.com',
+      '/$repoOwner/$repoName/issues/new',
+      <String, String>{
+        'title': issueTitle,
+        'body': body,
+        'labels': 'bug',
+      },
+    );
+  }
+
+  /// Copies bug report markdown to clipboard and opens the pre-filled GitHub issue in the browser.
+  static Future<bool> launchBugReportFlow({
+    required String title,
+    required String description,
+    String? stepsToReproduce,
+    required DeviceDiagnostics diagnostics,
+  }) async {
+    final String body = generateBugReportBody(
+      title: title,
+      description: description,
+      stepsToReproduce: stepsToReproduce,
+      diagnostics: diagnostics,
+    );
+
+    // 1. Copy snippet to clipboard for convenience
+    Clipboard.setData(ClipboardData(text: body));
+
+    // 2. Open GitHub Issue in browser
+    final Uri uri = buildBugReportUri(
+      title: title,
+      body: body,
     );
 
     return await openUrl(uri.toString());

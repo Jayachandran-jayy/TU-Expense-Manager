@@ -93,6 +93,15 @@ class MainActivity : FlutterFragmentActivity() {
                 "isFdroidInstalled" -> {
                     result.success(isFdroidInstalled())
                 }
+                "getDeviceInfo" -> {
+                    val info = mapOf(
+                        "manufacturer" to Build.MANUFACTURER,
+                        "model" to Build.MODEL,
+                        "androidVersion" to Build.VERSION.RELEASE,
+                        "sdkInt" to Build.VERSION.SDK_INT
+                    )
+                    result.success(info)
+                }
                 "openUrl" -> {
                     val url = call.argument<String>("url")
                     if (url != null) {

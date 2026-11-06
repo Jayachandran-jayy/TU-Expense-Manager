@@ -416,7 +416,7 @@ void main() {
   group('SettingsScreen integration', () {
     testWidgets('SettingsScreen displays Server rolling backups tile',
         (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.physicalSize = const Size(800, 4000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
