@@ -158,25 +158,28 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   bool _scanning = false;
   List<UnaddedSms> _unaddedSms = const <UnaddedSms>[];
 
-  Future<void> _fetchUnadded() async {
-    final existing = await _db.unaddedSms();
-    var updated = false;
-    for (final msg in existing) {
-      final parsed = SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
-      if (parsed != null) {
-        final id = await _db.insertParsed(parsed);
-        if (id > 0) {
-          await _db.deleteUnaddedSms(msg.id);
-          updated = true;
+  Future<void> _fetchUnadded({bool reparse = false}) async {
+    if (reparse) {
+      final existing = await _db.unaddedSms();
+      var updated = false;
+      for (final msg in existing) {
+        final parsed = SmsParser.parse(msg.body, receivedAt: msg.receivedAt);
+        if (parsed != null) {
+          final id = await _db.insertParsed(parsed);
+          if (id > 0) {
+            await _db.deleteUnaddedSms(msg.id);
+            updated = true;
+          }
         }
       }
-    }
-    if (updated) {
-      _transactions = await _db.transactions();
+      if (updated) {
+        _transactions = await _db.transactions();
+      }
     }
     final msgs = await _db.unaddedSms();
     if (mounted) setState(() => _unaddedSms = msgs);
   }
+  bool _isStartingSms = true;
   bool _smsListening = false;
   HomeTab _tab = HomeTab.dashboard;
 
@@ -226,15 +229,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     _filters = LedgerFilters.defaults(_currentMonth);
     _dashboardMonths = <YearMonth>{_currentMonth};
     _load();
-    _startSms();
-    _checkForUpdates();
-    // Applies whatever was edited in a browser, and pushes whatever changed
-    // here, without anyone having to remember to. Inert until a server is
-    // configured and signed into.
-    unawaited(AutoSync.instance.start(onChanged: _load));
-    // The light in the corner. Separate from the sync itself because it has to
-    // stay current between syncs, which are a quarter of an hour apart.
-    unawaited(ConnectionMonitor.instance.start());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _startSms();
+      _checkForUpdates();
+      // Applies whatever was edited in a browser, and pushes whatever changed
+      // here, without anyone having to remember to. Inert until a server is
+      // configured and signed into.
+      unawaited(AutoSync.instance.start(onChanged: _load));
+      // The light in the corner. Separate from the sync itself because it has to
+      // stay current between syncs, which are a quarter of an hour apart.
+      unawaited(ConnectionMonitor.instance.start());
+    });
   }
 
   @override
@@ -254,7 +260,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   Future<void> _onAppResumed() async {
-    if (!_sms.isSupported) return;
+    if (!_sms.isSupported || _isStartingSms) return;
     _ensureSmsListening();
     final since = await _db.lastScannedSmsDate();
     await _scan(since: since);
@@ -379,29 +385,33 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   /// up on the inbox — the whole of it on the very first run, and only what has
   /// arrived since on every run after that.
   Future<void> _startSms() async {
-    if (!_sms.isSupported) return;
-    final granted = await _sms.requestPermission();
-    if (!granted) return;
+    try {
+      if (!_sms.isSupported) return;
+      final granted = await _sms.requestPermission();
+      if (!granted) return;
 
-    _ensureSmsListening();
+      _ensureSmsListening();
 
-    final since = await _db.lastScannedSmsDate();
-    final _ScanResult? result;
-    if (since == null && mounted) {
-      result = await withProgressModal<_ScanResult?>(
-        context: context,
-        message: 'Importing SMS transactions…',
-        subtitle: 'Reading inbox messages…',
-        task: (progress) => _scan(since: null, progress: progress),
-      );
-    } else {
-      result = await _scan(since: since);
+      final since = await _db.lastScannedSmsDate();
+      final _ScanResult? result;
+      if (since == null && mounted) {
+        result = await withProgressModal<_ScanResult?>(
+          context: context,
+          message: 'Importing SMS transactions…',
+          subtitle: 'Reading inbox messages…',
+          task: (progress) => _scan(since: null, progress: progress),
+        );
+      } else {
+        result = await _scan(since: since);
+      }
+      // Only the first import is worth announcing; later catch-ups are routine.
+      if (result != null && since == null && result.added > 0) {
+        _toast('Imported ${result.added} transaction(s) from your inbox.');
+      }
+      _fetchUnadded();
+    } finally {
+      _isStartingSms = false;
     }
-    // Only the first import is worth announcing; later catch-ups are routine.
-    if (result != null && since == null && result.added > 0) {
-      _toast('Imported ${result.added} transaction(s) from your inbox.');
-    }
-    _fetchUnadded();
   }
 
   /// One pass over the inbox. The caller owns the permission check. Returns
@@ -1500,7 +1510,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           merchants: _derive().merchants,
           paymentTypes: _derive().paymentTypes,
           onChanged: () => Future.wait(<Future<void>>[
-            _fetchUnadded(),
+            _fetchUnadded(reparse: true),
             _load(),
           ]),
         ),
