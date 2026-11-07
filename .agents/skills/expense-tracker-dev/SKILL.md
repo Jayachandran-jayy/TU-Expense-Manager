@@ -168,6 +168,11 @@ The project is structured as a multi-platform Flutter app and a Dart CLI server:
     - **Zero Cloud Infrastructure**: Voluntary contributions leverage the project's public GitHub repository via pre-filled issue URLs with encoded Markdown templates and issue labels (`dataset-contribution,ai-rag`).
     - **In-App 3-Step Guide**: Interactive modal sheet provides an easy 3-step guide: 1) Inspect Redactions, 2) 1-Tap Submit (copies to clipboard and opens browser), and 3) Submit on GitHub, alongside a direct clickable link to the GitHub README contribution guide.
     - Accessible directly via Unadded SMS cards (🤝 button) and Settings ("Contribute a bank SMS format").
+  - **In-App Bug Reporting Pipeline (`ReportBugDialog`, `GitHubContributionHelper`, `MainActivity.kt`)**:
+    - **First Option in Settings**: Prominently accessible as the top tile under **Support & Feedback** in `SettingsScreen`.
+    - **Native Telemetry Bridge**: Android `MainActivity.kt` handles `"getDeviceInfo"` via `com.tu.expense.manager/telephony` returning manufacturer, device model, Android OS release, and SDK API level without external dependencies.
+    - **Privacy Boundary**: Diagnostics are limited to non-sensitive app/device specs (app version, build number, model, OS release). No transactions, SMS contents, financial balances, or personal identifiers are ever collected or sent.
+    - **1-Tap Submission & Clipboard Copy**: Generates formatted markdown bug report, copies it to clipboard, and pre-fills GitHub issue URL (`labels: 'bug'`, `title: '[Bug Report]: <Summary>'`).
   - **Python Training & LoRA Fine-Tuning Toolkit (`tool/train/`)**:
     - `curate_exemplars.py`: Automated curation script turning accepted community contributions into Dart source code for `rag_exemplars.dart`.
     - `fine_tune_qwen.py`: LoRA fine-tuning script on `Qwen/Qwen2.5-0.5B-Instruct` using Hugging Face `SFTTrainer`.

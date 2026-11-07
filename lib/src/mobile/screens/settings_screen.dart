@@ -34,6 +34,7 @@ import '../widgets/paste_transaction_dialog.dart';
 import '../widgets/server_backups_sheet.dart';
 import '../../ui_shared/shared_controls.dart';
 import 'contribute_sample_dialog.dart';
+import 'report_bug_dialog.dart';
 import '../services/github_contribution_helper.dart';
 import 'categories_screen.dart';
 import 'merchant_defaults_screen.dart';
@@ -905,6 +906,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? const Center(child: CircularProgressIndicator())
         : ListView(
             children: <Widget>[
+              SettingsHeader('Support & Feedback'),
+              ListTile(
+                leading: const Icon(Icons.bug_report_outlined),
+                title: const Text('Report a bug'),
+                subtitle: const Text(
+                  'Found an issue? Send diagnostics and submit a bug report on GitHub.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => ReportBugDialog.show(
+                  context,
+                  appVersion: _version,
+                  appBuild: _build,
+                ),
+              ),
+              const Divider(height: 32),
               SettingsHeader('Appearance'),
               Padding(
                 padding: const EdgeInsets.symmetric(
