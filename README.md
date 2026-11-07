@@ -936,6 +936,7 @@ key that finds the row again.
 ### Settings
 
 The settings destination on the navigation bar houses:
+- **Support & Feedback**: In-app **Report a bug** modal dialog that automatically includes non-sensitive system diagnostics (app version, Android release, device model) and copies the report to clipboard with 1-tap GitHub submission.
 - **Appearance & Themes**: Live base theme selection (**System**, **Light**, **Dark**, and **OLED Pitch Black**) paired with an 8-color accent palette (**Classic Blue**, **Crimson Red**, **Emerald Green**, **Royal Purple**, **Sunset Orange**, **Rose Pink**, **Teal/Cyan**, and **Cyber Amber**).
 - **Categorization**: **Merchants & defaults** configuration.
 - **Cleanup**: Merge merchants and cards/accounts.
