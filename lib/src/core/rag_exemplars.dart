@@ -308,6 +308,44 @@ class RagExemplars {
         'date': '2026-11-02',
       },
     ),
+
+    // 16. IRCTC Wallet Debit (Issue #114)
+    RagExemplar(
+      id: 'irctc_wallet_debit',
+      bank: 'IRCTC Wallet',
+      keywords: <String>['irctc', 'rwallet', 'wallet', 'debited', 'railway', 'rs'],
+      rawSms:
+          'Rs.167.70 debited from your RWallet Account on Nov  9 2026  8:56AM . Available Balance Rs.xxx.xx. Indian Railway',
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'debit',
+        'amount': 167.7,
+        'currency': 'INR',
+        'merchant': 'Indian Railway',
+        'account': 'RWallet Account',
+        'reference': null,
+        'date': '2026-11-09',
+      },
+    ),
+
+    // 17. SBI UPI Credit / Reversal (Issue #115)
+    RagExemplar(
+      id: 'sbi_upi_credit',
+      bank: 'SBI',
+      keywords: <String>['sbi', 'credit', 'reversal', 'upi', 'rs', 'avl'],
+      rawSms:
+          'Your A/C XXXXXXXXXXX has credit for UPI/REVERSAL/xxxx/yyyy of Rs 356.00 on 09/11/26. Avl Bal Rs xx,xxx.yy.-SBI',
+      expectedJson: <String, dynamic>{
+        'is_transaction': true,
+        'type': 'credit',
+        'amount': 356.0,
+        'currency': 'INR',
+        'merchant': 'yyyy',
+        'account': 'XXXXXXXXXXX',
+        'reference': 'xxxx',
+        'date': '2026-11-09',
+      },
+    ),
   ];
 
   /// Finds the top [limit] best matching exemplars for the input [messageText].

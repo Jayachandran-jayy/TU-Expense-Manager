@@ -571,6 +571,43 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       expect(parsed.hasExplicitTime, isTrue);
     });
 
+    test('parses IRCTC RWallet debit alert (Issue #114)', () {
+      const sms =
+          'Rs.167.70 debited from your RWallet Account on Nov  9 2026  8:56AM . Available Balance Rs.xxx.xx. Indian Railway';
+      final parsed = SmsParser.parse(sms);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'irctc_wallet_debit');
+      expect(parsed.amount, 167.70);
+      expect(parsed.paymentType, 'RWallet Account');
+      expect(parsed.merchant, 'Indian Railway');
+      expect(parsed.direction, TxnDirection.debit);
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 11);
+      expect(parsed.date.day, 9);
+      expect(parsed.date.hour, 8);
+      expect(parsed.date.minute, 56);
+      expect(parsed.hasExplicitTime, isTrue);
+    });
+
+    test('parses SBI UPI credit reversal alert (Issue #115)', () {
+      const sms =
+          'Your A/C XXXXXXXXXXX has credit for UPI/REVERSAL/xxxx/yyyy of Rs 356.00 on 09/11/26. Avl Bal Rs xx,xxx.yy.-SBI';
+      final parsed = SmsParser.parse(sms);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.templateId, 'sbi_upi_credit');
+      expect(parsed.amount, 356.0);
+      expect(parsed.paymentType, 'A/C XXXXXXXXXXX');
+      expect(parsed.merchant, 'yyyy');
+      expect(parsed.reference, 'xxxx');
+      expect(parsed.direction, TxnDirection.credit);
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 11);
+      expect(parsed.date.day, 9);
+      expect(parsed.hasExplicitTime, isFalse);
+    });
+
     test('RagExemplars retrieves newly added exemplars', () {
       const smsHdfc = "Debit Alert! Your HDFC Bank A/c xxxxxx has been debited Rs 1117 on 06th Oct' 2026 via Debit Mandate for RAZORPAY";
       final exHdfc = RagExemplars.findBestExemplars(smsHdfc, limit: 1);
@@ -601,6 +638,16 @@ Call 18002586161/SMS BLOCK UPI to 7308080808''';
       final exAtm = RagExemplars.findBestExemplars(smsAtm, limit: 1);
       expect(exAtm, isNotEmpty);
       expect(exAtm.first.id, 'hdfc_bank_card_atm_withdrawal');
+
+      const smsIrctc = 'Rs.167.70 debited from your RWallet Account on Nov  9 2026  8:56AM . Available Balance Rs.xxx.xx. Indian Railway';
+      final exIrctc = RagExemplars.findBestExemplars(smsIrctc, limit: 1);
+      expect(exIrctc, isNotEmpty);
+      expect(exIrctc.first.id, 'irctc_wallet_debit');
+
+      const smsSbi = 'Your A/C XXXXXXXXXXX has credit for UPI/REVERSAL/xxxx/yyyy of Rs 356.00 on 09/11/26. Avl Bal Rs xx,xxx.yy.-SBI';
+      final exSbi = RagExemplars.findBestExemplars(smsSbi, limit: 1);
+      expect(exSbi, isNotEmpty);
+      expect(exSbi.first.id, 'sbi_upi_credit');
     });
   });
 }

@@ -227,6 +227,47 @@ class SmsParser {
           r'(?:\s+(?:Not\s+you|Call|\.|$)|$)'),
     ),
 
+    /// IRCTC RWallet debit alert (Issue #114):
+    /// `Rs.167.70 debited from your RWallet Account on Nov  9 2026  8:56AM . Available Balance Rs.xxx.xx. Indian Railway`
+    SmsTemplate(
+      id: 'irctc_wallet_debit',
+      direction: TxnDirection.debit,
+      pattern: _re('$_cur$_amt\\s+debited\\s+from\\s+'
+          r'(?:your\s+)?(?<instrument>[^\n]*?(?:RWallet|IRCTC\s+Wallet|Wallet)[^\n]*?)\s+on\s+'
+          '$_date'
+          r'(?:[.\s]+(?:Available\s+Balance|Avl\s+Bal|Bal|Available|Avail)[^.\n]*?(?:Rs\.?|INR)?\s*[\d,xX*.]+)?'
+          r'[.\s]+(?<merchant>Indian\s+Railway|[^\n.]+?)\s*$'),
+    ),
+
+    /// SBI UPI credit / reversal alert (Issue #115):
+    /// `Your A/C XXXXXXXXXXX has credit for UPI/REVERSAL/xxxx/yyyy of Rs 356.00 on 09/11/26. Avl Bal Rs xx,xxx.yy.-SBI`
+    /// `Your A/C X1234 has credit for UPI/316719288101/SWIGGY of Rs 356.00 on 09/11/26. Avl Bal Rs 10,000.00.-SBI`
+    SmsTemplate(
+      id: 'sbi_upi_credit',
+      direction: TxnDirection.credit,
+      pattern: _re(r'(?:Your\s+)?(?<instrument>(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*(?:[Xx*]*\d+|[Xx*]{3,}))\s+'
+          r'has\s+credit\s+for\s+'
+          r'UPI/(?:REVERSAL/)?(?<ref>[\w\-]+)/(?<merchant>[^\n/]+?)\s+of\s+'
+          '$_cur$_amt'
+          r'\s+(?:on\s+date|on)\s+'
+          '$_date'
+          r'(?:[.\s]+(?:Avl|Bal|Available|Avail|Not\s+you|-SBI|\.|$)|$)'),
+    ),
+
+    /// SBI general credit alert:
+    /// `Your A/C XXXXXXXXXXX has credit for SALARY of Rs 35,000.00 on 09/11/26. Avl Bal Rs xx,xxx.yy.-SBI`
+    SmsTemplate(
+      id: 'sbi_has_credit',
+      direction: TxnDirection.credit,
+      pattern: _re(r'(?:Your\s+)?(?<instrument>(?:A/[Cc]|a/c|Acct|Account)(?:\s*no\.?)?\s*(?:[Xx*]*\d+|[Xx*]{3,}))\s+'
+          r'has\s+credit\s+for\s+'
+          r'(?<merchant>[^\n]+?)\s+of\s+'
+          '$_cur$_amt'
+          r'\s+(?:on\s+date|on)\s+'
+          '$_date'
+          r'(?:[.\s]+(?:Ref(?:\s*no)?|UTR|RRN)\.?\s*:?\s*(?<ref>\w+)|[.\s]+(?:Avl|Bal|Available|Avail|Not\s+you|-SBI|\.|$)|$)'),
+    ),
+
     // -- Unverified: written from each issuer's documented wording, not from
     //    a real message. Replace with the genuine body when one turns up.
 
