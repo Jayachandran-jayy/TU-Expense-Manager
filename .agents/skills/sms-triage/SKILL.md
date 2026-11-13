@@ -30,6 +30,7 @@ The triage workflow has 4 stages:
      - **Accepted Format**: Thank the contributor, confirm acceptance, and inform them it will be in the next release/build.
      - **Already Recognized Format**: Inform the contributor that the format is already matched by template `<template_id>` with extracted details (amount, date, merchant). Ask them to report if it didn't show up in their transactions or landed in Unadded SMS, and specify that the issue remains open for **7 days** before auto-closing.
      - **Invalid Alert**: Explain courteously why non-completed messages (mandates due, standing instructions scheduled, OTPs) cannot be added.
+   - **Auto-Close Expired Grace Periods**: If an issue was marked as **Already Recognized** and 7 days have elapsed with no author reply, close the issue automatically with a polite closing note (do not wait for developer confirmation).
    - Link closed issues in the commit/PR: `Closes #<issue_number>`.
 
 ---
@@ -61,6 +62,11 @@ dart run tool/dev/triage_sms_issues.dart --scaffold
 ### Triage and interactively reply to GitHub issues
 ```bash
 dart run tool/dev/triage_sms_issues.dart --reply
+```
+
+### Triage and auto-close expired grace period issues (>= 7 days without reply)
+```bash
+dart run tool/dev/triage_sms_issues.dart --auto-close
 ```
 
 ---

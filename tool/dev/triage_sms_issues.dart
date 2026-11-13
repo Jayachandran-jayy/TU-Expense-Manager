@@ -28,6 +28,7 @@ class ContributionIssue {
   final String sanitizedSms;
   final Map<String, dynamic>? expectedJson;
   final String rawBody;
+  final List<Map<String, dynamic>> comments;
 
   ContributionIssue({
     required this.number,
@@ -40,7 +41,55 @@ class ContributionIssue {
     required this.sanitizedSms,
     required this.expectedJson,
     required this.rawBody,
+    this.comments = const [],
   });
+
+  DateTime? get lastAlreadyRecognizedNoticeDate {
+    for (final Map<String, dynamic> c in comments.reversed) {
+      final String body = c['body'] as String? ?? '';
+      if (body.contains('7 days') && body.contains('already recognized')) {
+        final String? createdAtStr = c['createdAt'] as String?;
+        if (createdAtStr != null) {
+          return DateTime.tryParse(createdAtStr);
+        }
+      }
+    }
+    return null;
+  }
+
+  bool get hasUserReplyAfterNotice {
+    bool foundNotice = false;
+    for (final Map<String, dynamic> c in comments) {
+      final String body = c['body'] as String? ?? '';
+      if (!foundNotice) {
+        if (body.contains('7 days') && body.contains('already recognized')) {
+          foundNotice = true;
+        }
+      } else {
+        final String authorAssoc = c['authorAssociation'] as String? ?? '';
+        if (authorAssoc != 'OWNER') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  int get gracePeriodDaysElapsed {
+    final DateTime? noticeDate = lastAlreadyRecognizedNoticeDate;
+    if (noticeDate == null) return 0;
+    final DateTime now = DateTime.now().toUtc();
+    return DateTime(now.year, now.month, now.day)
+        .difference(DateTime(noticeDate.year, noticeDate.month, noticeDate.day))
+        .inDays;
+  }
+
+  bool get isExpiredGracePeriod {
+    if (state.toUpperCase() != 'OPEN') return false;
+    if (lastAlreadyRecognizedNoticeDate == null) return false;
+    if (hasUserReplyAfterNotice) return false;
+    return gracePeriodDaysElapsed >= 7;
+  }
 
   static ContributionIssue? parse(Map<String, dynamic> map) {
     final int number = map['number'] as int? ?? 0;
@@ -105,6 +154,11 @@ class ContributionIssue {
       } catch (_) {}
     }
 
+    final List<Map<String, dynamic>> comments = (map['comments'] as List<dynamic>?)
+            ?.map((dynamic e) => (e as Map).cast<String, dynamic>())
+            .toList() ??
+        [];
+
     return ContributionIssue(
       number: number,
       title: title,
@@ -116,6 +170,7 @@ class ContributionIssue {
       sanitizedSms: sanitizedSms,
       expectedJson: expectedJson,
       rawBody: body,
+      comments: comments,
     );
   }
 }
@@ -305,7 +360,34 @@ void printScaffolding(ContributionIssue issue, DiagnosticResult diag) {
   print('```');
 }
 
+Future<void> autoCloseExpiredIssue(ContributionIssue issue, DiagnosticResult diag) async {
+  final String closeComment =
+      'Closing this issue as the format is already recognized and supported by our SMS parser (`${diag.parsedResult?.templateId ?? "built-in"}`), and the 7-day waiting period has elapsed with no further activity. Feel free to reopen or leave a comment if you experience any parsing issues with this format!';
+
+  print('\n⏰ Issue #${issue.number} grace period has expired (>= 7 days without response).');
+  print('Auto-closing Issue #${issue.number} on GitHub...');
+  final ProcessResult res = await Process.run(
+    'gh',
+    ['issue', 'close', issue.number.toString(), '--comment', closeComment],
+  );
+  if (res.exitCode == 0) {
+    print('✅ Successfully closed Issue #${issue.number}.');
+  } else {
+    print('❌ Failed to close issue: ${res.stderr}');
+  }
+}
+
 Future<void> handleReply(ContributionIssue issue, DiagnosticResult diag) async {
+  if (issue.isExpiredGracePeriod) {
+    await autoCloseExpiredIssue(issue, diag);
+    return;
+  }
+  if (diag.isAlreadyRecognized && issue.lastAlreadyRecognizedNoticeDate != null) {
+    final int days = issue.gracePeriodDaysElapsed;
+    print('\n⏳ Notice already posted ($days / 7 days elapsed). Waiting for contributor response.');
+    return;
+  }
+
   String defaultReply = '';
   if (diag.isAlreadyRecognized) {
     final String dateStr = diag.parsedResult != null
@@ -354,6 +436,7 @@ Future<void> main(List<String> args) async {
   int? targetIssue;
   bool generateScaffold = false;
   bool shouldReply = false;
+  bool shouldAutoClose = false;
 
   for (final String arg in args) {
     if (arg == '--all') {
@@ -364,6 +447,8 @@ Future<void> main(List<String> args) async {
       generateScaffold = true;
     } else if (arg == '--reply') {
       shouldReply = true;
+    } else if (arg == '--auto-close') {
+      shouldAutoClose = true;
     } else if (arg == '--help' || arg == '-h') {
       print('''
 SMS Contribution Triage Tool
@@ -377,6 +462,7 @@ Options:
   --all              Include closed issues (default is open issues only)
   --scaffold         Generate code snippets for parser, RAG exemplars, and tests
   --reply            Prompt to post acceptance or rejection comment to GitHub
+  --auto-close       Automatically close open already-recognized issues past 7 days without reply
   --help, -h         Show help
 ''');
       return;
@@ -391,7 +477,7 @@ Options:
     '--state',
     (includeAll || targetIssue != null) ? 'all' : 'open',
     '--json',
-    'number,title,body,state,labels',
+    'number,title,body,state,labels,comments',
     '--limit',
     '100',
   ];
@@ -439,6 +525,12 @@ Options:
       print('   Direction: ${diag.parsedResult?.direction.name}');
       print('   Merchant: "${diag.parsedResult?.merchant}"');
       print('   Date: ${diag.parsedResult?.date}');
+      if (issue.isExpiredGracePeriod) {
+        print('   ⏰ Grace Period: EXPIRED (>= 7 days without response)');
+      } else if (issue.lastAlreadyRecognizedNoticeDate != null) {
+        final int days = issue.gracePeriodDaysElapsed;
+        print('   ⏳ Grace Period: $days / 7 days elapsed (waiting for response)');
+      }
     } else {
       print('⚠️ Status: VALID TRANSACTION (UNRECOGNIZED)');
       print('   Diagnosis Breakdown:');
@@ -455,7 +547,9 @@ Options:
       }
     }
 
-    if (shouldReply) {
+    if (shouldAutoClose && issue.isExpiredGracePeriod) {
+      await autoCloseExpiredIssue(issue, diag);
+    } else if (shouldReply) {
       await handleReply(issue, diag);
     }
     print('');
